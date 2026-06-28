@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Trackfolio · DCA Portfolio</title>
+<title>Temporary · DCA Portfolio</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%234f46e5'/%3E%3Cstop offset='1' stop-color='%2306b6d4'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='32' height='32' rx='8' fill='url(%23g)'/%3E%3Ctext x='16' y='24' text-anchor='middle' fill='white' font-family='system-ui,sans-serif' font-size='20' font-weight='800' letter-spacing='-1'%3ET%3C/text%3E%3C/svg%3E">
 <script src="./project/support.js"></script>
 <script src="./vendor/supabase.umd.js"></script>
@@ -98,7 +98,7 @@ const _sb = window.supabase.createClient(
               <span style="color:#fff;font-size:24px;font-weight:800;font-family:'Space Grotesk',system-ui,sans-serif;letter-spacing:-0.04em;line-height:1;margin-top:-1px">T</span>
             </div>
             <div style="line-height:1.05">
-              <div style="font-weight:700;font-size:17px;letter-spacing:-0.02em;font-family:'Space Grotesk',system-ui,sans-serif">Track<span style="color:var(--accent)">folio</span></div>
+              <div style="font-weight:700;font-size:17px;letter-spacing:-0.02em;font-family:'Space Grotesk',system-ui,sans-serif">Temporary</div>
               <div style="font-size:10.5px;color:var(--faint);letter-spacing:.05em">DCA PORTFOLIO</div>
             </div>
           </div>
@@ -207,7 +207,7 @@ const _sb = window.supabase.createClient(
           <span style="color:#fff;font-size:20px;font-weight:800;font-family:'Space Grotesk',system-ui,sans-serif;letter-spacing:-0.04em;line-height:1;margin-top:-1px">T</span>
         </div>
         <div style="line-height:1.05">
-          <div style="font-weight:700;font-size:15px;letter-spacing:-0.02em;font-family:'Space Grotesk',system-ui,sans-serif">Track<span style="color:var(--accent)">folio</span></div>
+          <div style="font-weight:700;font-size:15px;letter-spacing:-0.02em;font-family:'Space Grotesk',system-ui,sans-serif">Temporary</div>
           <div style="font-size:10.5px;color:var(--faint);letter-spacing:.04em">DCA PORTFOLIO</div>
         </div>
       </div>
@@ -1477,7 +1477,7 @@ class Component extends DCLogic {
     lang:'en',
     theme:'dark', screen:'dashboard', selPort:'global', dashView:'all',
     portNames:{}, editingName:false, editNameVal:'',
-    rate:36.52, prevRate:36.45,
+    rate:36.52, prevRate:36.45, livePrices:{},
     showForm:false, formError:false,
     form:{ type:'buy', portId:'global', sym:'VWRA', amount:'', owner:'dad', source:'savings', sourceFrom:'VOO', reason:'', date:'2026-06-22', wht:'' },
     filter:{ type:'all', port:'all', owner:'all', source:'all' },
@@ -1549,29 +1549,29 @@ class Component extends DCLogic {
   // ---------- data ----------
   get owners(){ const en=this.state.lang==='en'; return (this.state.members||[]).map(m=>({id:m.id,name:en?(m.en||m.th):m.th,initial:en?(m.enI||m.thI):m.thI,color:m.color,soft:m.soft})); }
   get ports(){ const ov=this.state.portNames||{}; const en=this.state.lang==='en'; const sub={global:['หุ้นเติบโตทั่วโลก','Global growth equities'],thai:['หุ้นปันผลไทย','Thai dividend stocks'],alt:['สินทรัพย์ทางเลือก','Alternative assets']}; const eh=this.state.extraHoldings||{}; const list=[...this._portsBase, ...(this.state.extraPorts||[])]; return list.map(p=>{ const s=sub[p.id]; const extra=eh[p.id]||[]; const holdings=extra.length?[...p.holdings,...extra]:p.holdings; const base={...p, holdings, en:(s?(en?s[1]:s[0]):p.en)}; return ov[p.id]?{...base,name:ov[p.id]}:base; }); }
-  get _portsBase(){ return [
+  get _portsBase(){ const lp=this.state.livePrices||{}; const lpr=(s,d)=>lp[s]?.price||d; return [
     {id:'global',name:'Global Growth',en:'หุ้นเติบโตทั่วโลก',color:'#8b5cf6',soft:'rgba(139,92,246,0.16)',
       icon:'M2 12a10 10 0 1 0 20 0 10 10 0 0 0-20 0M2 12h20M12 2a15 15 0 0 1 0 20a15 15 0 0 1 0-20',
       w:{dad:.55,mom:.35,me:.10},sparkSeed:11,
       holdings:[
-        {sym:'VWRA',tag:'VW',name:'FTSE All-World ETF',value:5800,cost:4900,price:120,tgt:50},
-        {sym:'QQQ',tag:'QQ',name:'Nasdaq 100 ETF',value:3600,cost:3000,price:500,tgt:30},
-        {sym:'VOO',tag:'VO',name:'S&P 500 ETF',value:2200,cost:2050,price:510,tgt:20},
+        {sym:'VWRA',tag:'VW',name:'FTSE All-World ETF',value:5800,cost:4900,price:lpr('VWRA',120),tgt:50},
+        {sym:'QQQ',tag:'QQ',name:'Nasdaq 100 ETF',value:3600,cost:3000,price:lpr('QQQ',500),tgt:30},
+        {sym:'VOO',tag:'VO',name:'S&P 500 ETF',value:2200,cost:2050,price:lpr('VOO',510),tgt:20},
       ]},
     {id:'thai',name:'Thai Dividend',en:'หุ้นปันผลไทย',color:'#06b6d4',soft:'rgba(6,182,212,0.16)',
       icon:'M3 7h18v13H3zM8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 12h18',
       w:{dad:.40,mom:.55,me:.05},sparkSeed:23,
       holdings:[
-        {sym:'TDEX',tag:'TD',name:'SET50 ETF',value:3000,cost:2750,price:38,tgt:45},
-        {sym:'ADVANC',tag:'AD',name:'Advanced Info',value:1900,cost:1800,price:230,tgt:30},
-        {sym:'AOT',tag:'AO',name:'Airports of TH',value:1650,cost:1620,price:62,tgt:25},
+        {sym:'TDEX',tag:'TD',name:'SET50 ETF',value:3000,cost:2750,price:lpr('TDEX',38),tgt:45},
+        {sym:'ADVANC',tag:'AD',name:'Advanced Info',value:1900,cost:1800,price:lpr('ADVANC',230),tgt:30},
+        {sym:'AOT',tag:'AO',name:'Airports of TH',value:1650,cost:1620,price:lpr('AOT',62),tgt:25},
       ]},
     {id:'alt',name:'Alternatives',en:'สินทรัพย์ทางเลือก',color:'#f59e0b',soft:'rgba(245,158,11,0.16)',
       icon:'M12 2l3 6 7 .5-5.5 4.5 2 7-6.5-4-6.5 4 2-7L2 8.5 9 8z',
       w:{dad:.20,mom:.15,me:.65},sparkSeed:37,
       holdings:[
-        {sym:'GOLD',tag:'AU',name:'ทองคำ 96.5%',value:1900,cost:1650,price:2300,tgt:55},
-        {sym:'BTC',tag:'฿C',name:'Bitcoin',value:1400,cost:980,price:64000,tgt:45},
+        {sym:'GOLD',tag:'AU',name:'ทองคำ 96.5%',value:1900,cost:1650,price:lpr('GOLD',2300),tgt:55},
+        {sym:'BTC',tag:'฿C',name:'Bitcoin',value:1400,cost:980,price:lpr('BTC',64000),tgt:45},
       ]},
   ]; }
   port(id){ return this.ports.find(p=>p.id===id)||this.ports[0]; }
@@ -1612,9 +1612,11 @@ class Component extends DCLogic {
   componentDidMount(){
     _sb.auth.onAuthStateChange((_ev,session)=>{ if(session?.user) this._onSignedIn(session.user); else this.setState({authed:false}); });
     _sb.auth.getSession().then(({data:{session}})=>{ if(session?.user) this._onSignedIn(session.user); });
-    this._iv=setInterval(()=>{ this.setState(s=>{ const d=(Math.random()-0.5)*0.16; let r=+(s.rate+d).toFixed(2); if(r<35.8) r=35.8; if(r>37.2) r=37.2; return {prevRate:s.rate,rate:r}; }); },2600);
+    this._iv=setInterval(()=>{ this.setState(s=>{ const d=(Math.random()-0.5)*0.04; let r=+(s.rate+d).toFixed(2); return {prevRate:s.rate,rate:r}; }); },2600);
+    this._fetchLivePrices();
+    this._iv2=setInterval(()=>this._fetchLivePrices(),5*60*1000);
   }
-  componentWillUnmount(){ if(this._iv) clearInterval(this._iv); }
+  componentWillUnmount(){ if(this._iv) clearInterval(this._iv); if(this._iv2) clearInterval(this._iv2); }
   async _onSignedIn(user){ this._userId=user.id; this._userEmail=user.email||''; this.setState({authed:true,loginErr:false,signupMode:false,showAccount:false}); this._loadData(user.id); }
   async _loadData(uid){
     try{
@@ -1649,6 +1651,22 @@ class Component extends DCLogic {
       for(const[k,v] of Object.entries(patch)) if(km[k]) row[km[k]]=v;
       await _sb.from('user_data').upsert(row);
     }catch(e){console.error('saveUD',e);}
+  }
+  async _fetchLivePrices(){
+    try{ const r=await fetch('https://open.er-api.com/v6/latest/USD'); const d=await r.json(); if(d.rates?.THB){ const rt=+d.rates.THB.toFixed(2); this.setState({rate:rt,prevRate:rt}); } }catch(e){}
+    try{
+      const syms=['NVDA','MSFT','AAPL','GOOGL','ASML','PLTR','V','KO','TSM','ADVANC.BK','AOT.BK','CPALL.BK','TDEX.BK','BTC-USD','GC=F','VWRA.L','QQQ','VOO'];
+      const resp=await fetch(`https://query1.finance.yahoo.com/v7/finance/quote?symbols=${syms.join(',')}`);
+      const data=await resp.json();
+      const quotes=data.quoteResponse?.result||[];
+      const lp={};
+      quotes.forEach(q=>{ if(q.regularMarketPrice) lp[q.symbol]={price:q.regularMarketPrice,chg:+(q.regularMarketChangePercent||0).toFixed(2)}; });
+      ['ADVANC','AOT','CPALL','TDEX'].forEach(s=>{ if(lp[s+'.BK']) lp[s]=lp[s+'.BK']; });
+      if(lp['VWRA.L']) lp['VWRA']=lp['VWRA.L'];
+      if(lp['GC=F']) lp['GOLD']=lp['GC=F'];
+      if(lp['BTC-USD']) lp['BTC']=lp['BTC-USD'];
+      this.setState({livePrices:lp});
+    }catch(e){ console.warn('prices',e); }
   }
   go(screen){ this.setState({screen}); }
   toggleTheme(){ const t=this.state.theme==='dark'?'light':'dark'; this.setState({theme:t}); this._saveUD({theme:t}); }
@@ -1691,7 +1709,7 @@ class Component extends DCLogic {
   toggleWatch(sym){ this.setState(s=>({ watchlist: s.watchlist.includes(sym)? s.watchlist.filter(x=>x!==sym) : [...s.watchlist,sym] }), ()=>{ this._saveUD({watchlist:this.state.watchlist}); }); }
   setAnaSort(key){ this.setState(s=>({ anaSort:key, anaSortDir: s.anaSort===key ? (s.anaSortDir==='asc'?'desc':'asc') : 'desc' })); }
   // ---------- sniper analysis ----------
-  get baseUniverse(){ return [
+  get baseUniverse(){ const lp=this.state.livePrices||{}; return [
     {sym:'NVDA',name:'NVIDIA',sector:'Semiconductors',price:1185,chg:1.8,mcap:2920,pe:58,pb:48,ps:34,peg:1.1,evEbitda:54,fcfY:1.6,divY:0.03,roe:91,roic:62,gm:75,nm:53,revG:78,epsG:96,de:0.18,cr:4.2,from52:142,rsi:64,r3m:18,r1y:120},
     {sym:'MSFT',name:'Microsoft',sector:'Software',price:452,chg:0.4,mcap:3360,pe:36,pb:13,ps:13,peg:2.1,evEbitda:25,fcfY:2.6,divY:0.72,roe:39,roic:29,gm:70,nm:36,revG:16,epsG:20,de:0.35,cr:1.3,from52:118,rsi:55,r3m:6,r1y:28},
     {sym:'AAPL',name:'Apple',sector:'Hardware',price:214,chg:-0.3,mcap:3290,pe:33,pb:46,ps:8.6,peg:3.4,evEbitda:24,fcfY:3.2,divY:0.49,roe:147,roic:58,gm:46,nm:26,revG:5,epsG:9,de:1.5,cr:0.95,from52:121,rsi:52,r3m:9,r1y:14},
@@ -1704,7 +1722,7 @@ class Component extends DCLogic {
     {sym:'ADVANC',name:'Advanced Info',sector:'Telecom TH',price:230,chg:0.5,mcap:21,pe:22,pb:8,ps:3.8,peg:1.6,evEbitda:9,fcfY:4.5,divY:3.8,roe:36,roic:20,gm:54,nm:18,revG:8,epsG:13,de:1.1,cr:0.8,from52:114,rsi:54,r3m:7,r1y:18},
     {sym:'AOT',name:'Airports of TH',sector:'Industrials TH',price:62,chg:-0.6,mcap:24,pe:34,pb:6,ps:11,peg:2.2,evEbitda:21,fcfY:1.8,divY:1.2,roe:17,roic:12,gm:48,nm:30,revG:20,epsG:26,de:0.45,cr:1.4,from52:106,rsi:43,r3m:-3,r1y:9},
     {sym:'CPALL',name:'CP All',sector:'Retail TH',price:58,chg:0.3,mcap:14,pe:20,pb:4,ps:0.5,peg:1.4,evEbitda:11,fcfY:3.6,divY:2.2,roe:22,roic:14,gm:23,nm:3,revG:11,epsG:17,de:1.8,cr:0.9,from52:110,rsi:51,r3m:5,r1y:12},
-  ]; }
+  ].map(s=>lp[s.sym]?{...s,price:lp[s.sym].price,chg:lp[s.sym].chg}:s); }
   clamp(n){ return Math.max(0,Math.min(100,n)); }
   get universe(){ return [...this.baseUniverse.filter(s=>!this.state.hiddenStocks.includes(s.sym)), ...this.state.customStocks]; }
   setStockForm(patch){ this.setState(s=>({stockForm:{...s.stockForm,...patch},stockFormErr:false})); }

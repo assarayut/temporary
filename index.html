@@ -1756,7 +1756,13 @@ class Component extends DCLogic {
     (this.state.customStocks||[]).forEach(s=>{ if(s.sym) dynSyms.add(String(s.sym).toUpperCase()); });
     (this.state.watchlist||[]).forEach(s=>{ if(s) dynSyms.add(String(s).toUpperCase()); });
     const map={}; dynSyms.forEach(s=>{ map[s]=known[s]||s; });
-    const proxies=[ u=>`https://corsproxy.io/?url=${encodeURIComponent(u)}`, u=>`https://api.allorigins.win/raw?url=${encodeURIComponent(u)}` ];
+    // several public CORS proxies — tried in order until one returns valid Yahoo JSON
+    const proxies=[
+      u=>`https://api.codetabs.com/v1/proxy/?quest=${encodeURIComponent(u)}`,
+      u=>`https://corsproxy.io/?url=${encodeURIComponent(u)}`,
+      u=>`https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+      u=>`https://thingproxy.freeboard.io/fetch/${u}`,
+    ];
     const fetchOne=async(key,ysym)=>{
       const yurl=`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ysym)}?interval=1d&range=2d`;
       for(const p of proxies){
@@ -1771,13 +1777,15 @@ class Component extends DCLogic {
       }
       return null;
     };
+    const lp={...(this.state.livePrices||{})};
+    let got=false;
+    // BTC straight from CoinGecko (CORS-enabled, no proxy/key needed) for reliability
+    try{ const r=await fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd&include_24hr_change=true'); const d=await r.json(); if(d&&d.bitcoin&&d.bitcoin.usd){ lp['BTC']={price:+d.bitcoin.usd,chg:+(+d.bitcoin.usd_24h_change||0).toFixed(2)}; got=true; } }catch(e){}
     try{
       const results=await Promise.allSettled(Object.entries(map).map(([k,y])=>fetchOne(k,y)));
-      const lp={...(this.state.livePrices||{})};
-      let got=false;
       results.forEach(r=>{ if(r.status==='fulfilled'&&r.value){ lp[r.value[0]]=r.value[1]; got=true; } });
-      if(got) this.setState({livePrices:lp});
     }catch(e){ console.warn('prices',e); }
+    if(got) this.setState({livePrices:lp});
   }
   go(screen){ this.setState({screen}); }
   toggleTheme(){ const t=this.state.theme==='dark'?'light':'dark'; this.setState({theme:t}); this._saveUD({theme:t}); }
@@ -2011,21 +2019,27 @@ class Component extends DCLogic {
     let todayPL=0; sp.forEach(p=>p.holdings.forEach(h=>{ const q=lpDay[h.sym]; if(q&&q.chg) todayPL+=h.value*(q.chg/100); }));
     const todayPct = sv>0 ? (todayPL/sv)*100 : 0;
 
-    // ----- dashboard value series (weekly) scoped -----
+    // ----- dashboard value series — built from the real transaction timeline (scoped) -----
     const N=78;
-    const mret=this.series(this.state.dashView==='all'?7:this.port(this.state.dashView).sparkSeed,0.0029,0.016,N);
-    const wgrowth=[]; for(let i=1;i<N;i++) wgrowth.push(mret[i]/mret[i-1]-1);
-    const C=scope.cost/N; let inv=C,val=C; const invR=[inv],valR=[val];
-    for(let i=0;i<wgrowth.length;i++){ inv+=C; val=val*(1+wgrowth[i])+C; invR.push(inv); valR.push(val); }
-    const vk=valR[valR.length-1]?scope.value/valR[valR.length-1]:0, ik=invR[invR.length-1]?scope.cost/invR[invR.length-1]:0;
-    const valSc=valR.map(x=>x*vk), invSc=invR.map(x=>x*ik);
-    const vmin=Math.min(...invSc,...valSc), vmax=Math.max(...invSc,...valSc);
+    const scopeIds=new Set(sp.map(p=>p.id));
+    const scopeTx=this.state.txns.filter(t=>scopeIds.has(t.portId)&&(t.type==='buy'||t.type==='sell')).slice().sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:0);
+    let invR=new Array(N).fill(0), valR=new Array(N).fill(0); let xFirst=Date.now(), xSpan=86400000;
+    if(scopeTx.length){
+      xFirst=Date.parse(scopeTx[0].date)||Date.now(); const now=Date.now(); xSpan=Math.max(now-xFirst,86400000);
+      const ratio=scope.cost>0?scope.value/scope.cost:1;
+      for(let i=0;i<N;i++){ const ti=xFirst+xSpan*i/(N-1); let inv=0; for(const t of scopeTx){ if((Date.parse(t.date)||0)<=ti) inv+=(t.type==='sell'?-1:1)*t.amount; } inv=Math.max(inv,0); invR[i]=inv; valR[i]=inv*ratio; }
+      invR[N-1]=scope.cost; valR[N-1]=scope.value;
+    }
+    const valSc=valR, invSc=invR;
+    const vmin=Math.min(0,...invSc,...valSc), vmax=Math.max(1,...invSc,...valSc);
     const dashLine=this.path(valSc,560,180,11,vmin,vmax);
     const dashInv=this.path(invSc,560,180,11,vmin,vmax);
     const dashFill=this.areaTo(valSc,560,180,11,vmin,vmax,180);
     const dashYLabels=this.ticks(vmin,vmax,5,v=>this.usdk(v));
     const dashGrid=this.gridY(180,11,5);
-    const dashXLabels=this.state.lang==='en'?['Jan','Apr','Jul','Oct','Jan','Jun']:['ม.ค.','เม.ย.','ก.ค.','ต.ค.','ม.ค.','มิ.ย.'];
+    const _moTh=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'], _moEn=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const _moArr=this.state.lang==='en'?_moEn:_moTh;
+    const dashXLabels = scopeTx.length ? [0,1,2,3,4,5].map(k=>{ const d=new Date(xFirst+xSpan*k/5); return _moArr[d.getMonth()]+' '+String(d.getFullYear()).slice(2); }) : (this.state.lang==='en'?['Jan','Apr','Jul','Oct','Jan','Jun']:['ม.ค.','เม.ย.','ก.ค.','ต.ค.','ม.ค.','มิ.ย.']);
 
     // ----- allocation + owners (scoped) -----
     const allocItems = this.state.dashView==='all'
@@ -2050,13 +2064,18 @@ class Component extends DCLogic {
     ];
     const ranges=(this.state.lang==='en'?['1M','3M','1Y','All']:['1ด','3ด','1ปี','ทั้งหมด']).map((label,i)=>({label,color:i===3?'var(--accent)':'var(--muted)',bg:i===3?'var(--accent-soft)':'transparent'}));
 
-    // ----- schedule -----
-    const moJul=this.t('ก.ค.','Jul');
-    const schedule=[
-      {day:'01',mon:moJul,port:this.pName('global'),freq:this.t('ทุกวันที่ 1','Every 1st'),amt:'$410',when:this.t('อีก 9 วัน','in 9 days'),dColor:'var(--muted)',bg:'var(--surface2)',border:'var(--border)'},
-      {day:'15',mon:moJul,port:this.pName('thai'),freq:this.t('ทุกวันที่ 15','Every 15th'),amt:'$220',when:this.t('อีก 3 วัน','in 3 days'),dColor:'var(--accent)',bg:'var(--accent-soft)',border:'var(--accent-soft)'},
-      {day:'25',mon:moJul,port:this.pName('alt'),freq:this.t('ทุกวันที่ 25','Every 25th'),amt:'$140',when:this.t('อีก 19 วัน','in 19 days'),dColor:'var(--muted)',bg:'var(--surface2)',border:'var(--border)'},
-    ];
+    // ----- schedule — next DCA round per real portfolio, from each one's strategy budget -----
+    const _now=new Date(); const _todayD=_now.getDate();
+    const schedule=this.ports.map((p,i)=>{
+      const sct=this.state.strategies[p.id]||{monthly:0,freq:'monthly'};
+      const amt=+sct.monthly||0; const day=((i*10)%28)+1;
+      let target=new Date(_now.getFullYear(),_now.getMonth(),day);
+      if(day<=_todayD) target=new Date(_now.getFullYear(),_now.getMonth()+1,day);
+      const diff=Math.round((target-new Date(_now.getFullYear(),_now.getMonth(),_todayD))/86400000);
+      const freqLabel=sct.freq==='weekly'?this.t('ทุกสัปดาห์','Weekly'):sct.freq==='quarterly'?this.t('ทุกไตรมาส','Quarterly'):this.t('ทุกเดือน','Monthly');
+      const soon=diff<=5;
+      return {day:String(target.getDate()).padStart(2,'0'),mon:_moArr[target.getMonth()],port:p.name,freq:freqLabel,amt:'$'+amt.toLocaleString('en-US'),when:diff<=0?this.t('วันนี้','today'):this.t('อีก '+diff+' วัน','in '+diff+' days'),dColor:soon?'var(--accent)':'var(--muted)',bg:soon?'var(--accent-soft)':'var(--surface2)',border:soon?'var(--accent-soft)':'var(--border)'};
+    });
 
     // ----- benchmarks (weekly) -----
     const perfSel=this.state.perfPortSel||'all';

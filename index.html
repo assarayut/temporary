@@ -1630,16 +1630,22 @@ class Component extends DCLogic {
     const trades=this.state.txns.filter(t=>t.portId===portId && (t.type==='buy'||t.type==='sell'))
       .slice().sort((a,b)=>(a.date<b.date?-1:a.date>b.date?1:(a.id||0)-(b.id||0)));
     trades.forEach(t=>{
-      const sym=t.sym; if(!acc[sym]) acc[sym]={sym,units:0,cost:0,last:0};
+      const sym=t.sym; if(!acc[sym]) acc[sym]={sym,units:0,cost:0,last:0,est:false};
       const m=acc[sym];
-      const price=(t.price!=null&&t.price!=='')?+t.price:(t.units?t.amount/t.units:0);
-      const units=(t.units!=null&&t.units!=='')?+t.units:(price?t.amount/price:0);
-      if(t.type==='buy'){ m.units+=units; m.cost+=units*price; m.last=price||m.last; }
-      else { const avg=m.units>1e-9?m.cost/m.units:price; m.units-=units; m.cost-=avg*units; m.last=price||m.last; if(m.units<1e-9){ m.units=0; m.cost=0; } }
+      const amt=+t.amount||0;
+      let price=(t.price!=null&&t.price!=='')?+t.price:0;
+      let units=(t.units!=null&&t.units!=='')?+t.units:(price?amt/price:0);
+      if(!units){ // legacy record with only an amount — estimate units from a live/last price
+        const ref=this.livePrice(sym,0)||m.last||price;
+        if(ref>0){ units=amt/ref; if(!price) price=ref; } else { m.est=true; }
+      }
+      // cost basis always comes from the actual money moved (amount), which every record has
+      if(t.type==='buy'){ m.cost+=amt; m.units+=units; if(price) m.last=price; }
+      else { const avg=m.units>1e-9?m.cost/m.units:price; m.units-=units; m.cost-=avg*units; if(price) m.last=price; if(m.units<1e-9){ m.units=0; m.cost=0; } if(m.cost<0) m.cost=0; }
     });
-    const list=Object.values(acc).filter(m=>m.units>1e-9);
+    const list=Object.values(acc).filter(m=>m.units>1e-9 || (m.est&&m.cost>0.5));
     const n=list.length||1;
-    return list.map(m=>{ const price=this.livePrice(m.sym,m.last||(m.units?m.cost/m.units:0)); const value=m.units*price;
+    return list.map(m=>{ const live=this.livePrice(m.sym,0); const price=live||m.last||(m.units>1e-9?m.cost/m.units:0); const value=m.units>1e-9?m.units*price:m.cost;
       return {sym:m.sym,tag:this.symTag(m.sym),name:this.symName(m.sym),units:m.units,cost:m.cost,price,value,tgt:Math.round(100/n)}; });
   }
   // net invested per owner within a portfolio, from the transaction log
@@ -1919,6 +1925,9 @@ class Component extends DCLogic {
       source: f.type==='dividend'?'dividend':(f.type==='sell'?'-':f.source),
       sourceFrom: f.source==='reinvest'?f.sourceFrom:undefined, wht, reason:f.reason };
     const row={date:base.date,type:base.type,port_id:base.portId,sym:base.sym,amount:base.amount,units:units!=null?units:null,price:unitPrice!=null?unitPrice:null,owner:base.owner,source:base.source,source_from:base.sourceFrom||null,wht:base.wht||null,reason:base.reason||null};
+    // if the units/price columns aren't in the DB yet, drop them and retry so the record still saves
+    const stripped=()=>{ const r={...row}; delete r.units; delete r.price; return r; };
+    const missingCol=err=>err&&/units|price|column|schema/i.test((err.message||'')+(err.details||''));
     const editId=this.state.editTxnId;
     const clearForm=s=>({...s.form,qty:'',price:'',amount:'',reason:'',wht:''});
     if(editId!=null){
@@ -1927,7 +1936,8 @@ class Component extends DCLogic {
       this.setState(s=>({ txns:s.txns.map(t=>t.id===editId?tx:t), showForm:false, formError:false, editTxnId:null, form:clearForm(s) }));
       try{
         const uid=this._userId; if(!uid) return;
-        const {error}=await _sb.from('transactions').update(row).eq('id',editId);
+        let {error}=await _sb.from('transactions').update(row).eq('id',editId);
+        if(error&&missingCol(error)){ ({error}=await _sb.from('transactions').update(stripped()).eq('id',editId)); }
         if(error) console.error('tx update',error);
       }catch(e){console.error('tx update',e);}
       return;
@@ -1938,8 +1948,10 @@ class Component extends DCLogic {
     this.setState(s=>({ txns:[tx,...s.txns], showForm:false, formError:false, form:clearForm(s) }));
     try{
       const uid=this._userId; if(!uid) return;
-      const {data,error}=await _sb.from('transactions').insert({user_id:uid,...row}).select('id').single();
+      let {data,error}=await _sb.from('transactions').insert({user_id:uid,...row}).select('id').single();
+      if(error&&missingCol(error)){ ({data,error}=await _sb.from('transactions').insert({user_id:uid,...stripped()}).select('id').single()); }
       if(!error&&data) this.setState(s=>({txns:s.txns.map(t=>t.id===id?{...t,id:data.id}:t)}));
+      else if(error) console.error('tx insert',error);
     }catch(e){console.error('tx insert',e);}
   }
   // ---------- held assets (for sell/dividend) ----------
@@ -2134,10 +2146,10 @@ class Component extends DCLogic {
     const selStrat=this.presets[this.state.strategies[selP.id].preset].name;
     const selOwners=this.ownerAggFor([selP]).map(o=>({name:o.name,color:o.color,widthPct:o.sharePct.toFixed(0)+'%',share:o.sharePct.toFixed(0)+'%',value:this.usd(o.value),pl:this.usdSign(o.pl),plPct:this.fpct1(o.plPct),plColor:o.pl>=0?upC:'var(--down)'}));
     const lpAll=this.state.livePrices||{};
-    const selHoldings=selP.holdings.map(h=>{ const units=h.units,avg=units>0?h.cost/units:0,pl=h.value-h.cost,plPct=h.cost>0?(h.value/h.cost-1)*100:0;
+    const selHoldings=selP.holdings.map(h=>{ const units=h.units,avg=units>0?h.cost/units:0,pl=h.value-h.cost,plPct=h.cost>0?(h.value/h.cost-1)*100:0; const noPx=!(h.price>0);
       const lq=lpAll[h.sym]; const isLive=!!lq;
-      return {sym:h.sym,tag:h.tag,name:h.name,value:this.usd(h.value),units:units.toFixed(units<1?4:units<10?2:1),avg:'$'+avg.toLocaleString('en-US',{maximumFractionDigits:units<1?0:2}),price:'$'+h.price.toLocaleString('en-US'),
-        priceNow:'$'+h.price.toLocaleString('en-US',{maximumFractionDigits:2}),
+      return {sym:h.sym,tag:h.tag,name:h.name,value:this.usd(h.value),units:units>1e-9?units.toFixed(units<1?4:units<10?2:1):'—',avg:units>1e-9?'$'+avg.toLocaleString('en-US',{maximumFractionDigits:units<1?0:2}):'—',price:noPx?'—':'$'+h.price.toLocaleString('en-US'),
+        priceNow:noPx?'—':'$'+h.price.toLocaleString('en-US',{maximumFractionDigits:2}),
         dayChg:isLive?this.fpct(lq.chg):this.t('สแนปช็อต','snapshot'), dayColor:isLive?(lq.chg>=0?upC:'var(--down)'):'var(--faint)', isLive, notLive:!isLive,
         pl:this.usdSign(pl),plPct:this.fpct1(plPct),plColor:pl>=0?upC:'var(--down)',canDel:true,notCanDel:false,onDelete:()=>this.deleteTxnsForSym(selP.id,h.sym)}; });
     const selRebal=this.rebalFor(selP).map(r=>({sym:r.sym,name:r.name,cur:r.cur.toFixed(1)+'%',target:r.tgt+'%',curW:Math.min(r.cur,100).toFixed(0)+'%',targetW:r.tgt+'%',action:Math.abs(r.diffV)<60?this.t('อยู่ในเป้า ✓','On target ✓'):(r.diffV>0?this.t('ซื้อเพิ่ม ','Buy ')+this.usd(r.diffV):this.t('ขายออก ','Sell ')+this.usd(-r.diffV)),actColor:Math.abs(r.diffV)<60?'var(--muted)':(r.diffV>0?upC:'var(--down)')}));

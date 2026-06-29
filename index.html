@@ -987,7 +987,7 @@ const _sb = window.supabase.createClient(
               <span style="font-size:11px;color:{{ t.oc }};background:{{ t.os }};padding:3px 8px;border-radius:6px;justify-self:start;font-weight:500">{{ t.owner }}</span>
               <div style="text-align:right">
                 <div class="num" style="font-size:13px;font-weight:600;color:{{ t.amtColor }}">{{ t.amt }}</div>
-                <div class="num" style="font-size:10px;color:var(--faint)">{{ t.units }}</div>
+                <div class="num" style="font-size:10px;color:var(--faint)">{{ t.qtyPrice }}</div>
               </div>
               <span class="num" style="font-size:12px;text-align:right;color:{{ t.whtColor }}">{{ t.wht }}</span>
             </div>
@@ -1719,8 +1719,18 @@ class Component extends DCLogic {
         await _sb.from('user_data').upsert({id:uid});
       }
       const {data:txns}=await _sb.from('transactions').select('*').eq('user_id',uid).order('date',{ascending:false});
-      if(txns&&txns.length) this.setState({txns:txns.map(t=>({id:t.id,date:t.date,type:t.type,portId:t.port_id,sym:t.sym,amount:+t.amount,units:t.units!=null?+t.units:undefined,price:t.price!=null?+t.price:undefined,owner:t.owner,source:t.source,sourceFrom:t.source_from,wht:t.wht!=null?+t.wht:undefined,reason:t.reason}))});
+      if(txns&&txns.length){
+        this.setState({txns:txns.map(t=>({id:t.id,date:t.date,type:t.type,portId:t.port_id,sym:t.sym,amount:+t.amount,units:t.units!=null?+t.units:undefined,price:t.price!=null?+t.price:undefined,owner:t.owner,source:t.source,sourceFrom:t.source_from,wht:t.wht!=null?+t.wht:undefined,reason:t.reason}))},()=>this._repairOrphanTxns());
+      }
     }catch(e){console.error('loadData',e);}
+  }
+  // move any records that point to a deleted portfolio onto the first existing one, so they're never lost
+  async _repairOrphanTxns(){
+    const valid=new Set(this.ports.map(p=>p.id)); const target=this.ports[0]&&this.ports[0].id; if(!target) return;
+    const orphans=this.state.txns.filter(t=>!valid.has(t.portId));
+    if(!orphans.length) return;
+    this.setState(s=>({txns:s.txns.map(t=>valid.has(t.portId)?t:{...t,portId:target})}));
+    try{ if(this._userId){ for(const o of orphans){ await _sb.from('transactions').update({port_id:target}).eq('id',o.id); } } }catch(e){ console.error('repair',e); }
   }
   async _saveUD(patch){
     try{
@@ -1807,8 +1817,9 @@ class Component extends DCLogic {
     const buySources=['savings','salary','bonus','reinvest'];
     const isTrade=orig.type==='buy'||orig.type==='sell';
     const u=orig.units!=null?orig.units:(orig.price?orig.amount/orig.price:'');
+    const portId=this.ports.some(p=>p.id===orig.portId)?orig.portId:(this.ports[0]?this.ports[0].id:orig.portId);
     this.setState({ screen:'txn', showForm:true, showTxnDetail:false, txnDetail:null, formError:false, editTxnId:orig.id,
-      form:{ type:orig.type, portId:orig.portId, sym:orig.sym,
+      form:{ type:orig.type, portId, sym:orig.sym,
         qty:isTrade&&u!==''?String(+(+u).toFixed(6)):'', price:isTrade&&orig.price!=null?String(orig.price):'',
         amount:String(orig.amount), owner:orig.owner,
         source:buySources.includes(orig.source)?orig.source:'savings', sourceFrom:orig.sourceFrom||'VOO',
@@ -1921,7 +1932,9 @@ class Component extends DCLogic {
       units=undefined; unitPrice=undefined;
     }
     const wht = f.type==='dividend' ? (f.wht===''||f.wht==null ? +(amt*0.10).toFixed(2) : (parseFloat(f.wht)||0)) : undefined;
-    const base={date:f.date,type:f.type,portId:f.portId,sym,amount:amt,units,price:unitPrice,owner:f.owner,
+    // never save to a portfolio that no longer exists — fall back to the first available one
+    const portId = this.ports.some(p=>p.id===f.portId) ? f.portId : (this.ports[0]?this.ports[0].id:f.portId);
+    const base={date:f.date,type:f.type,portId,sym,amount:amt,units,price:unitPrice,owner:f.owner,
       source: f.type==='dividend'?'dividend':(f.type==='sell'?'-':f.source),
       sourceFrom: f.source==='reinvest'?f.sourceFrom:undefined, wht, reason:f.reason };
     const row={date:base.date,type:base.type,port_id:base.portId,sym:base.sym,amount:base.amount,units:units!=null?units:null,price:unitPrice!=null?unitPrice:null,owner:base.owner,source:base.source,source_from:base.sourceFrom||null,wht:base.wht||null,reason:base.reason||null};
@@ -2205,6 +2218,7 @@ class Component extends DCLogic {
         amt:(t.type==='sell'?'-':'+')+'$'+t.amount.toLocaleString('en-US'),amtColor:t.type==='sell'?'var(--down)':upC,
         units:units?(units.toFixed(units<1?4:units<10?2:1)):'—',
         priceEach: (t.price!=null&&t.price!=='')?'$'+(+t.price).toLocaleString('en-US',{maximumFractionDigits:2}):'—',
+        qtyPrice: (t.type==='buy'||t.type==='sell') ? ( (units?units.toFixed(units<1?4:units<10?2:1):'?') + (t.price!=null&&t.price!=='' ? ' × $'+(+t.price).toLocaleString('en-US',{maximumFractionDigits:2}) : '') + ' ' + this.t('หน่วย','units') ) : '—',
         wht: whtVal!=null ? this.usd(whtVal) : '—', whtColor: whtVal? 'var(--down)':'var(--faint)',
         sourceLabel:srcLabel,reason:t.reason||'',date:(dd[2]||'')+' '+(monMap[dd[1]]||''),dateFull:t.date}; }); txns.forEach(row=>{ row.onDelete=()=>this.deleteTxn(row.id); row.onOpen=()=>this.openTxn(row); row.onEdit=()=>this.editTxn(row); });
     // sortable column headers
@@ -2450,7 +2464,7 @@ class Component extends DCLogic {
       onCloseAccount:()=>this.setState({showAccount:false}), onCloseTxn:()=>this.closeTxn(), onTxnStop:e=>e.stopPropagation(),
       onAccountStop:e=>e.stopPropagation(),
       onToggleTheme:()=>this.toggleTheme(),
-      onOpenAdd:()=>this.setState({screen:'txn',showForm:true,editTxnId:null,form:{...this.state.form,amount:'',reason:'',wht:''}}),
+      onOpenAdd:()=>{ const ps=this.ports; const pid=ps.some(p=>p.id===this.state.form.portId)?this.state.form.portId:(ps[0]?ps[0].id:'global'); this.setState({screen:'txn',showForm:true,editTxnId:null,form:{...this.state.form,portId:pid,qty:'',price:'',amount:'',reason:'',wht:''}}); },
       onCancel:()=>this.setState({showForm:false,formError:false,editTxnId:null}),
       onSubmit:()=>this.submit(),
       txnFormTitle:this.state.editTxnId!=null?this.t('แก้ไขรายการ','Edit record'):this.t('บันทึกรายการใหม่','New transaction'),

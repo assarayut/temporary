@@ -299,6 +299,7 @@ const _sb = window.supabase.createClient(
           <div style="display:flex;justify-content:space-between;font-size:13px"><span style="color:var(--muted)">{{ ui.txnDtOwner }}</span><span style="font-weight:600;color:{{ txnDetail.oc }}">{{ txnDetail.owner }}</span></div>
           <div style="display:flex;justify-content:space-between;font-size:13px"><span style="color:var(--muted)">{{ ui.txnDtAmt }}</span><span class="num" style="font-weight:700;font-size:15px;color:{{ txnDetail.amtColor }}">{{ txnDetail.amt }}</span></div>
           <div style="display:flex;justify-content:space-between;font-size:13px"><span style="color:var(--muted)">{{ ui.txnDtUnits }}</span><span class="num" style="font-weight:600">{{ txnDetail.units }}</span></div>
+          <div style="display:flex;justify-content:space-between;font-size:13px"><span style="color:var(--muted)">{{ ui.txnDtPriceEach }}</span><span class="num" style="font-weight:600">{{ txnDetail.priceEach }}</span></div>
           <div style="display:flex;justify-content:space-between;font-size:13px"><span style="color:var(--muted)">{{ ui.txnDtSrc }}</span><span style="font-weight:600">{{ txnDetail.sourceLabel }}</span></div>
           <div style="display:flex;justify-content:space-between;font-size:13px"><span style="color:var(--muted)">{{ ui.txnWhtCol }}</span><span class="num" style="font-weight:600;color:{{ txnDetail.whtColor }}">{{ txnDetail.wht }}</span></div>
         </div>
@@ -870,10 +871,28 @@ const _sb = window.supabase.createClient(
               </sc-if>
             </label>
             <datalist id="worldstocks"><sc-for list="{{ worldOpts }}" as="o" hint-placeholder-count="6"><option value="{{ o.sym }}">{{ o.label }}</option></sc-for></datalist>
-            <label style="display:flex;flex-direction:column;gap:6px">
-              <span style="font-size:11.5px;color:var(--muted)">{{ ui.txnAmount }}</span>
-              <input class="fld num" inputmode="decimal" placeholder="0.00" value="{{ form.amount }}" onInput="{{ onFAmount }}">
-            </label>
+            <sc-if value="{{ isTradeForm }}" hint-placeholder-val="{{ true }}">
+              <label style="display:flex;flex-direction:column;gap:6px">
+                <span style="font-size:11.5px;color:var(--muted)">{{ ui.txnQty }}</span>
+                <input class="fld num" inputmode="decimal" placeholder="0" value="{{ form.qty }}" onInput="{{ onFQty }}">
+              </label>
+              <label style="display:flex;flex-direction:column;gap:6px">
+                <span style="font-size:11.5px;color:var(--muted)">{{ ui.txnPrice }}</span>
+                <input class="fld num" inputmode="decimal" placeholder="0.00" value="{{ form.price }}" onInput="{{ onFPrice }}">
+                <span style="font-size:10.5px;color:var(--accent)">{{ livePxHint }}</span>
+              </label>
+              <label style="display:flex;flex-direction:column;gap:6px">
+                <span style="font-size:11.5px;color:var(--muted)">{{ ui.txnTotalAmt }}</span>
+                <div class="fld num" style="display:flex;align-items:center;background:var(--surface2);color:var(--text);font-weight:600">{{ computedAmount }}</div>
+                <span style="font-size:10.5px;color:var(--faint)">{{ computedAmountThb }}</span>
+              </label>
+            </sc-if>
+            <sc-if value="{{ notTradeForm }}" hint-placeholder-val="{{ false }}">
+              <label style="display:flex;flex-direction:column;gap:6px">
+                <span style="font-size:11.5px;color:var(--muted)">{{ ui.txnAmount }}</span>
+                <input class="fld num" inputmode="decimal" placeholder="0.00" value="{{ form.amount }}" onInput="{{ onFAmount }}">
+              </label>
+            </sc-if>
             <label style="display:flex;flex-direction:column;gap:6px">
               <span style="font-size:11.5px;color:var(--muted)">{{ ui.txnOwner }}</span>
               <select class="fld" value="{{ form.owner }}" onChange="{{ onFOwner }}">
@@ -1361,7 +1380,6 @@ const _sb = window.supabase.createClient(
               <label style="display:flex;flex-direction:column;gap:5px"><span style="font-size:11px;color:var(--muted)">{{ ui.anColStock }}</span><input class="fld" value="{{ stockForm.sym }}" onInput="{{ onSfSym }}" placeholder="NVDA"></label>
               <label style="display:flex;flex-direction:column;gap:5px"><span style="font-size:11px;color:var(--muted)">{{ ui.anSfName }}</span><input class="fld" value="{{ stockForm.name }}" onInput="{{ onSfName }}" placeholder="NVIDIA"></label>
               <label style="display:flex;flex-direction:column;gap:5px"><span style="font-size:11px;color:var(--muted)">{{ ui.anSfSector }}</span><input class="fld" value="{{ stockForm.sector }}" onInput="{{ onSfSector }}" placeholder="Semiconductors"></label>
-              <label style="display:flex;flex-direction:column;gap:5px"><span style="font-size:11px;color:var(--muted)">{{ ui.anSfPrice }}</span><input class="fld num" inputmode="decimal" value="{{ stockForm.price }}" onInput="{{ onSfPrice }}" placeholder="100"></label>
               <label style="display:flex;flex-direction:column;gap:5px"><span style="font-size:11px;color:var(--muted)">P/E</span><input class="fld num" inputmode="decimal" value="{{ stockForm.pe }}" onInput="{{ onSfPe }}" placeholder="25"></label>
               <label style="display:flex;flex-direction:column;gap:5px"><span style="font-size:11px;color:var(--muted)">PEG</span><input class="fld num" inputmode="decimal" value="{{ stockForm.peg }}" onInput="{{ onSfPeg }}" placeholder="1.8"></label>
               <label style="display:flex;flex-direction:column;gap:5px"><span style="font-size:11px;color:var(--muted)">{{ ui.anSfRoe }}</span><input class="fld num" inputmode="decimal" value="{{ stockForm.roe }}" onInput="{{ onSfRoe }}" placeholder="25"></label>
@@ -1522,19 +1540,19 @@ class Component extends DCLogic {
     portNames:{}, editingName:false, editNameVal:'',
     rate:36.52, prevRate:36.45, livePrices:{},
     showForm:false, formError:false, editTxnId:null,
-    form:{ type:'buy', portId:'global', sym:'VWRA', amount:'', owner:'dad', source:'savings', sourceFrom:'VOO', reason:'', date:'2026-06-22', wht:'' },
+    form:{ type:'buy', portId:'global', sym:'', qty:'', price:'', amount:'', owner:'dad', source:'savings', sourceFrom:'VOO', reason:'', date:'2026-06-28', wht:'' },
     filter:{ type:'all', port:'all', owner:'all', source:'all' },
     sortKey:'date', sortDir:'desc',
     perfHover:null, profitHover:null, ddHover:null,
     txns:[
-      {id:1,date:'2026-06-15',type:'buy',portId:'thai',sym:'TDEX',amount:220,owner:'mom',source:'savings',reason:'DCA รายเดือนตามแผน'},
+      {id:1,date:'2026-06-15',type:'buy',portId:'thai',sym:'TDEX',units:5.79,price:38,amount:220,owner:'mom',source:'savings',reason:'DCA รายเดือนตามแผน'},
       {id:2,date:'2026-06-12',type:'dividend',portId:'thai',sym:'ADVANC',amount:43,owner:'mom',source:'dividend',wht:4.3,reason:'ปันผลระหว่างกาล 5.20 บาท/หุ้น'},
-      {id:3,date:'2026-06-01',type:'buy',portId:'global',sym:'VWRA',amount:410,owner:'dad',source:'salary',reason:'DCA รายเดือน'},
-      {id:4,date:'2026-05-28',type:'buy',portId:'global',sym:'QQQ',amount:120,owner:'dad',source:'reinvest',sourceFrom:'VOO',reason:'นำปันผล VOO กลับมาลงทุน'},
-      {id:5,date:'2026-05-25',type:'buy',portId:'alt',sym:'BTC',amount:140,owner:'me',source:'bonus',reason:'โบนัสกลางปี แบ่งลงทุนเสี่ยงสูง'},
-      {id:6,date:'2026-05-15',type:'buy',portId:'thai',sym:'TDEX',amount:220,owner:'mom',source:'savings',reason:'DCA รายเดือน'},
-      {id:7,date:'2026-05-08',type:'sell',portId:'global',sym:'QQQ',amount:300,owner:'dad',source:'-',reason:'ทำกำไรบางส่วน ลดสัดส่วนตามเป้า'},
-      {id:8,date:'2026-04-25',type:'buy',portId:'alt',sym:'GOLD',amount:130,owner:'me',source:'savings',reason:'กระจายความเสี่ยง'},
+      {id:3,date:'2026-06-01',type:'buy',portId:'global',sym:'VWRA',units:3.42,price:120,amount:410,owner:'dad',source:'salary',reason:'DCA รายเดือน'},
+      {id:4,date:'2026-05-28',type:'buy',portId:'global',sym:'QQQ',units:1.2,price:500,amount:600,owner:'dad',source:'reinvest',sourceFrom:'VOO',reason:'นำปันผล VOO กลับมาลงทุน'},
+      {id:5,date:'2026-05-25',type:'buy',portId:'alt',sym:'BTC',units:0.00219,price:64000,amount:140,owner:'me',source:'bonus',reason:'โบนัสกลางปี แบ่งลงทุนเสี่ยงสูง'},
+      {id:6,date:'2026-05-15',type:'buy',portId:'thai',sym:'TDEX',units:5.95,price:37,amount:220,owner:'mom',source:'savings',reason:'DCA รายเดือน'},
+      {id:7,date:'2026-05-08',type:'sell',portId:'global',sym:'QQQ',units:0.594,price:505,amount:300,owner:'dad',source:'-',reason:'ทำกำไรบางส่วน ลดสัดส่วนตามเป้า'},
+      {id:8,date:'2026-04-25',type:'buy',portId:'alt',sym:'GOLD',units:0.0565,price:2300,amount:130,owner:'me',source:'savings',reason:'กระจายความเสี่ยง'},
     ],
     strategies:{
       global:{preset:'growth',monthly:410,freq:'monthly',threshold:5},
@@ -1584,43 +1602,53 @@ class Component extends DCLogic {
   rng(seed){ let s=seed>>>0; return ()=>{ s=Math.imul(s^(s>>>15),s|1); s^=s+Math.imul(s^(s>>>7),s|61); return ((s^(s>>>14))>>>0)/4294967296; }; }
   series(seed,drift,vol,n){ const r=this.rng(seed); let idx=100; const out=[idx]; for(let i=1;i<n;i++){ const ret=drift+(r()-0.5)*2*vol; idx=Math.max(idx*(1+ret),idx*0.7); out.push(idx); } return out; }
   pctSeries(seed,drift,vol,target,n){ const s=this.series(seed,drift,vol,n); let p=s.map(v=>(v/s[0]-1)*100); const last=p[p.length-1]||1; const k=target/last; return p.map(x=>x*k); }
-  path(vals,W,H,padY,min,max){ const mn=(min===undefined)?Math.min(...vals):min, mx=(max===undefined)?Math.max(...vals):max; const r=(mx-mn)||1,n=vals.length; return vals.map((v,i)=>{ const x=i/(n-1)*W; const y=padY+(H-2*padY)*(1-(v-mn)/r); return (i?'L':'M')+x.toFixed(1)+' '+y.toFixed(1); }).join(' '); }
+  path(vals,W,H,padY,min,max){ const sv=(vals||[]).map(v=>Number.isFinite(v)?v:0); let mn=(min===undefined)?Math.min(...sv):min, mx=(max===undefined)?Math.max(...sv):max; if(!Number.isFinite(mn))mn=0; if(!Number.isFinite(mx))mx=mn+1; const r=(mx-mn)||1,n=sv.length||1; return sv.map((v,i)=>{ const x=(n>1?i/(n-1):0)*W; const y=padY+(H-2*padY)*(1-(v-mn)/r); return (i?'L':'M')+x.toFixed(1)+' '+(Number.isFinite(y)?y:padY).toFixed(1); }).join(' '); }
   areaTo(vals,W,H,padY,min,max,baseY){ return this.path(vals,W,H,padY,min,max)+` L${W} ${baseY} L0 ${baseY} Z`; }
   ticks(min,max,count,fmt){ const out=[]; for(let i=0;i<count;i++){ const f=i/(count-1); out.push(fmt(max-(max-min)*f)); } return out; }
   gridY(H,padY,count){ const out=[]; for(let i=0;i<count;i++){ const f=i/(count-1); out.push((padY+(H-2*padY)*f).toFixed(1)); } return out; }
 
   // ---------- data ----------
   get owners(){ const en=this.state.lang==='en'; return (this.state.members||[]).map(m=>({id:m.id,name:en?(m.en||m.th):m.th,initial:en?(m.enI||m.thI):m.thI,color:m.color,soft:m.soft})); }
-  get ports(){ const ov=this.state.portNames||{}; const en=this.state.lang==='en'; const sub={global:['หุ้นเติบโตทั่วโลก','Global growth equities'],thai:['หุ้นปันผลไทย','Thai dividend stocks'],alt:['สินทรัพย์ทางเลือก','Alternative assets']}; const eh=this.state.extraHoldings||{}; const list=[...this._portsBase, ...(this.state.extraPorts||[])]; return list.map(p=>{ const s=sub[p.id]; const extra=eh[p.id]||[]; const holdings=extra.length?[...p.holdings,...extra]:p.holdings; const base={...p, holdings, en:(s?(en?s[1]:s[0]):p.en)}; return ov[p.id]?{...base,name:ov[p.id]}:base; }); }
-  get _portsBase(){ const lp=this.state.livePrices||{}; const lpr=(s,d)=>lp[s]?.price||d; const hh=(this.state.settings&&this.state.settings.hiddenHoldings)||{}; const base=[
+  // Portfolios are containers; their holdings are derived live from the transaction log.
+  get ports(){ const ov=this.state.portNames||{}; const en=this.state.lang==='en'; const hp=(this.state.settings&&this.state.settings.hiddenPorts)||[]; const sub={global:['หุ้นเติบโตทั่วโลก','Global growth equities'],thai:['หุ้นปันผลไทย','Thai dividend stocks'],alt:['สินทรัพย์ทางเลือก','Alternative assets']}; const list=[...this._portsBase, ...(this.state.extraPorts||[])].filter(p=>!hp.includes(p.id)); return list.map(p=>{ const s=sub[p.id]; const base={...p, holdings:this.computeHoldings(p.id), en:(s?(en?s[1]:s[0]):p.en)}; return ov[p.id]?{...base,name:ov[p.id]}:base; }); }
+  get _portsBase(){ return [
     {id:'global',name:'Global Growth',en:'หุ้นเติบโตทั่วโลก',color:'#8b5cf6',soft:'rgba(139,92,246,0.16)',
-      icon:'M2 12a10 10 0 1 0 20 0 10 10 0 0 0-20 0M2 12h20M12 2a15 15 0 0 1 0 20a15 15 0 0 1 0-20',
-      w:{dad:.55,mom:.35,me:.10},sparkSeed:11,
-      holdings:[
-        {sym:'VWRA',tag:'VW',name:'FTSE All-World ETF',value:5800,cost:4900,price:lpr('VWRA',120),tgt:50},
-        {sym:'QQQ',tag:'QQ',name:'Nasdaq 100 ETF',value:3600,cost:3000,price:lpr('QQQ',500),tgt:30},
-        {sym:'VOO',tag:'VO',name:'S&P 500 ETF',value:2200,cost:2050,price:lpr('VOO',510),tgt:20},
-      ]},
+      icon:'M2 12a10 10 0 1 0 20 0 10 10 0 0 0-20 0M2 12h20M12 2a15 15 0 0 1 0 20a15 15 0 0 1 0-20', sparkSeed:11},
     {id:'thai',name:'Thai Dividend',en:'หุ้นปันผลไทย',color:'#06b6d4',soft:'rgba(6,182,212,0.16)',
-      icon:'M3 7h18v13H3zM8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 12h18',
-      w:{dad:.40,mom:.55,me:.05},sparkSeed:23,
-      holdings:[
-        {sym:'TDEX',tag:'TD',name:'SET50 ETF',value:3000,cost:2750,price:lpr('TDEX',38),tgt:45},
-        {sym:'ADVANC',tag:'AD',name:'Advanced Info',value:1900,cost:1800,price:lpr('ADVANC',230),tgt:30},
-        {sym:'AOT',tag:'AO',name:'Airports of TH',value:1650,cost:1620,price:lpr('AOT',62),tgt:25},
-      ]},
+      icon:'M3 7h18v13H3zM8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 12h18', sparkSeed:23},
     {id:'alt',name:'Alternatives',en:'สินทรัพย์ทางเลือก',color:'#f59e0b',soft:'rgba(245,158,11,0.16)',
-      icon:'M12 2l3 6 7 .5-5.5 4.5 2 7-6.5-4-6.5 4 2-7L2 8.5 9 8z',
-      w:{dad:.20,mom:.15,me:.65},sparkSeed:37,
-      holdings:[
-        {sym:'GOLD',tag:'AU',name:'ทองคำ 96.5%',value:1900,cost:1650,price:lpr('GOLD',2300),tgt:55},
-        {sym:'BTC',tag:'฿C',name:'Bitcoin',value:1400,cost:980,price:lpr('BTC',64000),tgt:45},
-      ]},
-  ]; return base.map(p=>({...p, holdings:p.holdings.filter(h=>!((hh[p.id]||[]).includes(h.sym)))})); }
-  port(id){ return this.ports.find(p=>p.id===id)||this.ports[0]; }
-  pName(id){ return this.port(id).name; }
-  sym2name(sym){ for(const p of this.ports){ const h=p.holdings.find(x=>x.sym===sym); if(h) return h.name; } return ''; }
-  totals(p){ const value=p.holdings.reduce((a,h)=>a+h.value,0); const cost=p.holdings.reduce((a,h)=>a+h.cost,0); return {value,cost,pl:value-cost,plPct:(value/cost-1)*100}; }
+      icon:'M12 2l3 6 7 .5-5.5 4.5 2 7-6.5-4-6.5 4 2-7L2 8.5 9 8z', sparkSeed:37},
+  ]; }
+  // ---------- symbol metadata ----------
+  get symDict(){ return {NVDA:'NVIDIA',MSFT:'Microsoft',AAPL:'Apple',GOOGL:'Alphabet',ASML:'ASML',PLTR:'Palantir',V:'Visa',KO:'Coca-Cola',TSM:'TSMC',ADVANC:'Advanced Info',AOT:'Airports of TH',CPALL:'CP All',VWRA:'FTSE All-World ETF',QQQ:'Nasdaq 100 ETF',VOO:'S&P 500 ETF',TDEX:'SET50 ETF',GOLD:this.t('ทองคำ 96.5%','Gold 96.5%'),BTC:'Bitcoin'}; }
+  symName(sym){ const c=(this.state.customStocks||[]).find(s=>s.sym===sym); return (c&&c.name)||this.symDict[sym]||sym; }
+  symTag(sym){ const t={VWRA:'VW',QQQ:'QQ',VOO:'VO',TDEX:'TD',ADVANC:'AD',AOT:'AO',CPALL:'CP',GOLD:'AU',BTC:'฿C',NVDA:'NV',MSFT:'MS',AAPL:'AA',GOOGL:'GO'}; return t[sym]||(sym||'?').slice(0,2).toUpperCase(); }
+  livePrice(sym,fallback){ const lp=this.state.livePrices||{}; return lp[sym]?lp[sym].price:(fallback||0); }
+  // ---------- holdings derived from transaction log (single source of truth) ----------
+  computeHoldings(portId){
+    const acc={};
+    const trades=this.state.txns.filter(t=>t.portId===portId && (t.type==='buy'||t.type==='sell'))
+      .slice().sort((a,b)=>(a.date<b.date?-1:a.date>b.date?1:(a.id||0)-(b.id||0)));
+    trades.forEach(t=>{
+      const sym=t.sym; if(!acc[sym]) acc[sym]={sym,units:0,cost:0,last:0};
+      const m=acc[sym];
+      const price=(t.price!=null&&t.price!=='')?+t.price:(t.units?t.amount/t.units:0);
+      const units=(t.units!=null&&t.units!=='')?+t.units:(price?t.amount/price:0);
+      if(t.type==='buy'){ m.units+=units; m.cost+=units*price; m.last=price||m.last; }
+      else { const avg=m.units>1e-9?m.cost/m.units:price; m.units-=units; m.cost-=avg*units; m.last=price||m.last; if(m.units<1e-9){ m.units=0; m.cost=0; } }
+    });
+    const list=Object.values(acc).filter(m=>m.units>1e-9);
+    const n=list.length||1;
+    return list.map(m=>{ const price=this.livePrice(m.sym,m.last||(m.units?m.cost/m.units:0)); const value=m.units*price;
+      return {sym:m.sym,tag:this.symTag(m.sym),name:this.symName(m.sym),units:m.units,cost:m.cost,price,value,tgt:Math.round(100/n)}; });
+  }
+  // net invested per owner within a portfolio, from the transaction log
+  portOwnerMix(portId){ const om={}; this.state.txns.filter(t=>t.portId===portId && (t.type==='buy'||t.type==='sell')).forEach(t=>{ const sign=t.type==='sell'?-1:1; om[t.owner]=(om[t.owner]||0)+sign*t.amount; }); return om; }
+  heldSymsInPort(portId){ return this.computeHoldings(portId).map(h=>h.sym); }
+  port(id){ return this.ports.find(p=>p.id===id)||this.ports[0]||{id,name:'',holdings:[]}; }
+  pName(id){ const p=this.ports.find(p=>p.id===id); return p?p.name:id; }
+  sym2name(sym){ return this.symName(sym); }
+  totals(p){ const hs=(p&&p.holdings)||[]; const value=hs.reduce((a,h)=>a+h.value,0); const cost=hs.reduce((a,h)=>a+h.cost,0); return {value,cost,pl:value-cost,plPct:cost>0?(value/cost-1)*100:0}; }
 
   get sources(){ const en=this.state.lang==='en'; return {
     savings:{name:en?'Savings':'เงินออม',color:'#34d399'},
@@ -1639,17 +1667,19 @@ class Component extends DCLogic {
 
   // ---------- scope helpers ----------
   scopePorts(){ return this.state.dashView==='all' ? this.ports : [this.port(this.state.dashView)]; }
+  // owners' stake — derived entirely from logged transactions, distributed over current value
   ownerAggFor(ports){
     const om={}; this.owners.forEach(o=>om[o.id]={...o,value:0,cost:0});
-    ports.forEach(p=>{ const t=this.totals(p); this.owners.forEach(o=>{ const w=(p.w&&p.w[o.id]!=null)?p.w[o.id]:0; om[o.id].value+=w*t.value; om[o.id].cost+=w*t.cost; }); });
-    // custom members (no static weight): derive ownership from their logged transactions
-    const baseIds=new Set(['dad','mom','me']); const inScope=new Set(ports.map(p=>p.id));
-    this.state.txns.forEach(tx=>{ if(baseIds.has(tx.owner)||!om[tx.owner]||!inScope.has(tx.portId)) return; const sign=tx.type==='sell'?-1:1; om[tx.owner].cost+=sign*tx.amount; om[tx.owner].value+=sign*tx.amount*1.08; });
-    const totC=Object.values(om).reduce((a,o)=>a+o.cost,0)||1;
-    return Object.values(om).filter(o=>o.cost>0.5).map(o=>({...o,pl:o.value-o.cost,plPct:(o.value/o.cost-1)*100,sharePct:o.cost/totC*100}));
+    const inScope=new Set(ports.map(p=>p.id));
+    ports.forEach(p=>{ if(!inScope.has(p.id)) return; const t=this.totals(p); const mix=this.portOwnerMix(p.id);
+      const totInv=Object.values(mix).reduce((a,b)=>a+Math.max(b,0),0);
+      Object.entries(mix).forEach(([oid,inv])=>{ if(!om[oid]) om[oid]={id:oid,name:oid,initial:(oid||'?').slice(0,1).toUpperCase(),color:'var(--accent)',soft:'var(--accent-soft)',value:0,cost:0}; const share=totInv>0?Math.max(inv,0)/totInv:0; om[oid].cost+=inv; om[oid].value+=share*t.value; });
+    });
+    const totC=Object.values(om).reduce((a,o)=>a+Math.max(o.cost,0),0)||1;
+    return Object.values(om).filter(o=>o.cost>0.5).map(o=>({...o,pl:o.value-o.cost,plPct:o.cost>0?(o.value/o.cost-1)*100:0,sharePct:o.cost/totC*100}));
   }
   donut(items){ const Cc=2*Math.PI*46; const tot=items.reduce((a,i)=>a+i.value,0)||1; let acc=0; return items.map(it=>{ const pct=it.value/tot*100; const len=pct/100*Cc; const seg={name:it.name,color:it.color,pctLabel:pct.toFixed(1)+'%',dash:`${len.toFixed(1)} ${(Cc-len).toFixed(1)}`,offset:(-acc/100*Cc).toFixed(1)}; acc+=pct; return seg; }); }
-  rebalFor(p){ const t=this.totals(p); return p.holdings.map(h=>{ const cur=h.value/t.value*100; const diffV=(h.tgt-cur)/100*t.value; return {sym:h.sym,name:h.name,cur,tgt:h.tgt,diffV}; }); }
+  rebalFor(p){ const t=this.totals(p); return p.holdings.map(h=>{ const cur=t.value>0?h.value/t.value*100:0; const diffV=(h.tgt-cur)/100*t.value; return {sym:h.sym,name:h.name,cur,tgt:h.tgt,diffV}; }); }
 
   // ---------- lifecycle ----------
   componentDidMount(){
@@ -1683,7 +1713,7 @@ class Component extends DCLogic {
         await _sb.from('user_data').upsert({id:uid});
       }
       const {data:txns}=await _sb.from('transactions').select('*').eq('user_id',uid).order('date',{ascending:false});
-      if(txns&&txns.length) this.setState({txns:txns.map(t=>({id:t.id,date:t.date,type:t.type,portId:t.port_id,sym:t.sym,amount:+t.amount,owner:t.owner,source:t.source,sourceFrom:t.source_from,wht:t.wht!=null?+t.wht:undefined,reason:t.reason}))});
+      if(txns&&txns.length) this.setState({txns:txns.map(t=>({id:t.id,date:t.date,type:t.type,portId:t.port_id,sym:t.sym,amount:+t.amount,units:t.units!=null?+t.units:undefined,price:t.price!=null?+t.price:undefined,owner:t.owner,source:t.source,sourceFrom:t.source_from,wht:t.wht!=null?+t.wht:undefined,reason:t.reason}))});
     }catch(e){console.error('loadData',e);}
   }
   async _saveUD(patch){
@@ -1702,7 +1732,14 @@ class Component extends DCLogic {
     // Yahoo's v7 quote endpoint is blocked by CORS and now needs a crumb, so we use the
     // v8 chart endpoint (no crumb required) routed through a public CORS proxy. Each symbol
     // is fetched independently so a single failure never wipes out the rest.
-    const map={NVDA:'NVDA',MSFT:'MSFT',AAPL:'AAPL',GOOGL:'GOOGL',ASML:'ASML',PLTR:'PLTR',V:'V',KO:'KO',TSM:'TSM',ADVANC:'ADVANC.BK',AOT:'AOT.BK',CPALL:'CPALL.BK',TDEX:'TDEX.BK',VWRA:'VWRA.L',QQQ:'QQQ',VOO:'VOO',GOLD:'GC=F',BTC:'BTC-USD'};
+    // base symbol -> Yahoo ticker mapping for the well-known names
+    const known={ADVANC:'ADVANC.BK',AOT:'AOT.BK',CPALL:'CPALL.BK',TDEX:'TDEX.BK',VWRA:'VWRA.L',GOLD:'GC=F',BTC:'BTC-USD'};
+    // collect every symbol the user actually holds / watches / tracks, so prices stay live for all of them
+    const dynSyms=new Set(['NVDA','MSFT','AAPL','GOOGL','ASML','PLTR','V','KO','TSM','QQQ','VOO',...Object.keys(known)]);
+    (this.state.txns||[]).forEach(t=>{ if(t.sym) dynSyms.add(String(t.sym).toUpperCase()); });
+    (this.state.customStocks||[]).forEach(s=>{ if(s.sym) dynSyms.add(String(s.sym).toUpperCase()); });
+    (this.state.watchlist||[]).forEach(s=>{ if(s) dynSyms.add(String(s).toUpperCase()); });
+    const map={}; dynSyms.forEach(s=>{ map[s]=known[s]||s; });
     const proxies=[ u=>`https://corsproxy.io/?url=${encodeURIComponent(u)}`, u=>`https://api.allorigins.win/raw?url=${encodeURIComponent(u)}` ];
     const fetchOne=async(key,ysym)=>{
       const yurl=`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ysym)}?interval=1d&range=2d`;
@@ -1737,37 +1774,49 @@ class Component extends DCLogic {
   openTxn(t){ this.setState({showTxnDetail:true,txnDetail:t}); }
   closeTxn(){ this.setState({showTxnDetail:false,txnDetail:null}); }
   async deleteTxn(id){ if(!this._userId) return; try{ const {error}=await _sb.from('transactions').delete().eq('id',id); if(error){ console.error('delete error',error); return; } this.setState(s=>({txns:s.txns.filter(t=>t.id!==id),showTxnDetail:false,txnDetail:null})); }catch(e){ console.error('deleteTxn',e); } }
-  deleteHolding(portId,sym){
-    const extra=this.state.extraHoldings[portId]||[];
-    if(extra.some(h=>h.sym===sym)){
-      // user-added holding -> remove it
-      const eh={...this.state.extraHoldings,[portId]:extra.filter(h=>h.sym!==sym)};
-      this.setState({extraHoldings:eh},()=>this._saveUD({extraHoldings:this.state.extraHoldings}));
-    } else {
-      // base/demo holding -> mark hidden so it stays cleared after refresh
-      const hh={...((this.state.settings&&this.state.settings.hiddenHoldings)||{})};
-      hh[portId]=[...(hh[portId]||[]),sym];
-      const settings={...this.state.settings,hiddenHoldings:hh};
-      this.setState({settings},()=>this._saveUD({settings:this.state.settings}));
-    }
+  // a holding is just the net of its transactions — removing it removes those records
+  async deleteTxnsForSym(portId,sym){
+    const ids=this.state.txns.filter(t=>t.portId===portId&&t.sym===sym).map(t=>t.id);
+    if(!ids.length) return;
+    if(typeof confirm==='function' && !confirm(this.t(`ลบรายการทั้งหมดของ ${sym} ในพอร์ตนี้?`,`Remove all ${sym} records in this portfolio?`))) return;
+    this.setState(s=>({txns:s.txns.filter(t=>!(t.portId===portId&&t.sym===sym))}));
+    try{ if(this._userId) await _sb.from('transactions').delete().in('id',ids); }catch(e){ console.error('del sym',e); }
   }
   deletePortfolio(id){
-    if(!(this.state.extraPorts||[]).some(p=>p.id===id)) return; // only user-created ports
-    const extraPorts=this.state.extraPorts.filter(p=>p.id!==id);
-    const strategies={...this.state.strategies}; delete strategies[id];
-    const extraHoldings={...this.state.extraHoldings}; delete extraHoldings[id];
-    this.setState({extraPorts,strategies,extraHoldings,screen:'ports',selPort:'global'},()=>this._saveUD({extraPorts,strategies,extraHoldings}));
+    if(typeof confirm==='function' && !confirm(this.t('ลบพอร์ตนี้? รายการบันทึกที่อยู่ในพอร์ตจะยังอยู่','Delete this portfolio? Its transaction records are kept'))) return;
+    if((this.state.extraPorts||[]).some(p=>p.id===id)){
+      // user-created -> remove the container
+      const extraPorts=this.state.extraPorts.filter(p=>p.id!==id);
+      const strategies={...this.state.strategies}; delete strategies[id];
+      this.setState({extraPorts,strategies,screen:'ports',selPort:'global'},()=>this._saveUD({extraPorts,strategies}));
+    } else {
+      // base container -> hide it so it stays gone after refresh
+      const hp=[...((this.state.settings&&this.state.settings.hiddenPorts)||[]),id];
+      const settings={...this.state.settings,hiddenPorts:hp};
+      this.setState({settings,screen:'ports',selPort:'global'},()=>this._saveUD({settings:this.state.settings}));
+    }
   }
   editTxn(t){
     const orig=this.state.txns.find(x=>x.id===t.id); if(!orig) return;
     const buySources=['savings','salary','bonus','reinvest'];
+    const isTrade=orig.type==='buy'||orig.type==='sell';
+    const u=orig.units!=null?orig.units:(orig.price?orig.amount/orig.price:'');
     this.setState({ screen:'txn', showForm:true, showTxnDetail:false, txnDetail:null, formError:false, editTxnId:orig.id,
-      form:{ type:orig.type, portId:orig.portId, sym:orig.sym, amount:String(orig.amount), owner:orig.owner,
+      form:{ type:orig.type, portId:orig.portId, sym:orig.sym,
+        qty:isTrade&&u!==''?String(+(+u).toFixed(6)):'', price:isTrade&&orig.price!=null?String(orig.price):'',
+        amount:String(orig.amount), owner:orig.owner,
         source:buySources.includes(orig.source)?orig.source:'savings', sourceFrom:orig.sourceFrom||'VOO',
         reason:orig.reason||'', date:orig.date, wht:orig.wht!=null?String(orig.wht):'' } });
   }
   setPerfPort(id){ this.setState({perfPortSel:id}); }
-  setForm(patch){ this.setState(s=>{ const form={...s.form,...patch}; if(patch.type && patch.type!=='buy'){ const held=this.heldOpts(form.portId); if(!held.some(h=>h.sym===form.sym)) form.sym = held.length?held[0].sym:''; } if(patch.portId && form.type!=='buy'){ const held=this.heldOpts(patch.portId); form.sym = held.length?held[0].sym:''; } return {form,formError:false}; }); }
+  setForm(patch){ this.setState(s=>{ const form={...s.form,...patch};
+    if(patch.type && patch.type!=='buy'){ const held=this.heldOpts(form.portId); if(!held.some(h=>h.sym===form.sym)) form.sym = held.length?held[0].sym:''; }
+    if(patch.portId && form.type!=='buy'){ const held=this.heldOpts(patch.portId); form.sym = held.length?held[0].sym:''; }
+    // auto-fill the price field with the live market price when the symbol changes
+    if((patch.sym!==undefined||patch.type!==undefined||patch.portId!==undefined) && (form.type==='buy'||form.type==='sell')){
+      const lp=this.livePrice((form.sym||'').toUpperCase(),0); if(lp) form.price=String(lp);
+    }
+    return {form,formError:false}; }); }
   setFilter(patch){ this.setState(s=>({filter:{...s.filter,...patch}})); }
   setStrat(id,patch){ this.setState(s=>({strategies:{...s.strategies,[id]:{...s.strategies[id],...patch}}})); }
   startEditName(){ this.setState(s=>({editingName:true,editNameVal:this.port(s.selPort).name})); }
@@ -1815,16 +1864,18 @@ class Component extends DCLogic {
     {sym:'CPALL',name:'CP All',sector:'Retail TH',price:58,chg:0.3,mcap:14,pe:20,pb:4,ps:0.5,peg:1.4,evEbitda:11,fcfY:3.6,divY:2.2,roe:22,roic:14,gm:23,nm:3,revG:11,epsG:17,de:1.8,cr:0.9,from52:110,rsi:51,r3m:5,r1y:12},
   ].map(s=>lp[s.sym]?{...s,price:lp[s.sym].price,chg:lp[s.sym].chg}:s); }
   clamp(n){ return Math.max(0,Math.min(100,n)); }
-  get universe(){ return [...this.baseUniverse.filter(s=>!this.state.hiddenStocks.includes(s.sym)), ...this.state.customStocks]; }
+  get universe(){ const lp=this.state.livePrices||{}; const custom=(this.state.customStocks||[]).map(s=>lp[s.sym]?{...s,price:lp[s.sym].price,chg:lp[s.sym].chg}:s); return [...this.baseUniverse.filter(s=>!this.state.hiddenStocks.includes(s.sym)), ...custom]; }
   setStockForm(patch){ this.setState(s=>({stockForm:{...s.stockForm,...patch},stockFormErr:false})); }
   persistStocks(){ this._saveUD({customStocks:this.state.customStocks,hiddenStocks:this.state.hiddenStocks}); }
   addStock(){ const f=this.state.stockForm; const sym=(f.sym||'').trim().toUpperCase(); if(!sym||!(f.name||'').trim()){ this.setState({stockFormErr:true}); return; }
     const num=(v,d)=>{ const n=parseFloat(v); return isNaN(n)?d:n; };
+    // price is pulled live; the optional fundamentals only feed the Sniper score
+    const livePx=this.livePrice(sym,0);
     const s={ sym, name:f.name.trim(), sector:(f.sector||'').trim()||this.t('กำหนดเอง','Custom'),
-      price:num(f.price,100), chg:0, mcap:50, pe:num(f.pe,25), pb:6, ps:5, peg:num(f.peg,1.8), evEbitda:18, fcfY:3,
+      price:livePx||num(f.price,100), chg:(this.state.livePrices||{})[sym]?(this.state.livePrices)[sym].chg:0, mcap:50, pe:num(f.pe,25), pb:6, ps:5, peg:num(f.peg,1.8), evEbitda:18, fcfY:3,
       divY:num(f.divY,1), roe:num(f.roe,25), roic:18, gm:50, nm:num(f.nm,20), revG:num(f.revG,12), epsG:15,
       de:0.6, cr:1.5, from52:115, rsi:52, r3m:5, r1y:20, custom:true };
-    this.setState(st=>({ customStocks:[...st.customStocks.filter(x=>x.sym!==sym),s], hiddenStocks:st.hiddenStocks.filter(x=>x!==sym), showStockForm:false, stockForm:{sym:'',name:'',sector:'',price:'',pe:'',roe:'',revG:'',nm:'',peg:'',divY:''} }), ()=>this.persistStocks());
+    this.setState(st=>({ customStocks:[...st.customStocks.filter(x=>x.sym!==sym),s], hiddenStocks:st.hiddenStocks.filter(x=>x!==sym), showStockForm:false, stockForm:{sym:'',name:'',sector:'',price:'',pe:'',roe:'',revG:'',nm:'',peg:'',divY:''} }), ()=>{ this.persistStocks(); this._fetchLivePrices(); });
   }
   removeStock(sym){ this.setState(st=>({ hiddenStocks: st.customStocks.some(x=>x.sym===sym)?st.hiddenStocks:[...st.hiddenStocks,sym], customStocks:st.customStocks.filter(x=>x.sym!==sym), watchlist:st.watchlist.filter(x=>x!==sym) }), ()=>{ this.persistStocks(); this._saveUD({watchlist:this.state.watchlist}); }); }
   scoreStock(s){
@@ -1851,20 +1902,32 @@ class Component extends DCLogic {
     return { pct, base:+(b*pct/100).toFixed(0), dip1:+(b*pct/100*(1+cfg.dip1/100)).toFixed(0), dip2:+(b*pct/100*(1+cfg.dip2/100)).toFixed(0) };
   }
   async submit(){
-    const f=this.state.form; const amt=parseFloat(f.amount); const sym=(f.sym||'').trim().toUpperCase();
-    if(!amt||amt<=0||!sym){ this.setState({formError:true}); return; }
+    const f=this.state.form; const sym=(f.sym||'').trim().toUpperCase();
+    const isTrade=f.type==='buy'||f.type==='sell';
+    const qty=parseFloat(f.qty), price=parseFloat(f.price);
+    let units, unitPrice, amt;
+    if(isTrade){
+      if(!sym||!(qty>0)||!(price>0)){ this.setState({formError:true}); return; }
+      units=qty; unitPrice=price; amt=+(qty*price).toFixed(2);
+    } else {
+      amt=parseFloat(f.amount);
+      if(!sym||!(amt>0)){ this.setState({formError:true}); return; }
+      units=undefined; unitPrice=undefined;
+    }
     const wht = f.type==='dividend' ? (f.wht===''||f.wht==null ? +(amt*0.10).toFixed(2) : (parseFloat(f.wht)||0)) : undefined;
-    const base={date:f.date,type:f.type,portId:f.portId,sym,amount:amt,owner:f.owner,
+    const base={date:f.date,type:f.type,portId:f.portId,sym,amount:amt,units,price:unitPrice,owner:f.owner,
       source: f.type==='dividend'?'dividend':(f.type==='sell'?'-':f.source),
       sourceFrom: f.source==='reinvest'?f.sourceFrom:undefined, wht, reason:f.reason };
+    const row={date:base.date,type:base.type,port_id:base.portId,sym:base.sym,amount:base.amount,units:units!=null?units:null,price:unitPrice!=null?unitPrice:null,owner:base.owner,source:base.source,source_from:base.sourceFrom||null,wht:base.wht||null,reason:base.reason||null};
     const editId=this.state.editTxnId;
+    const clearForm=s=>({...s.form,qty:'',price:'',amount:'',reason:'',wht:''});
     if(editId!=null){
       // ----- edit existing record -----
       const tx={...base,id:editId};
-      this.setState(s=>({ txns:s.txns.map(t=>t.id===editId?tx:t), showForm:false, formError:false, editTxnId:null, form:{...s.form,amount:'',reason:'',wht:''} }));
+      this.setState(s=>({ txns:s.txns.map(t=>t.id===editId?tx:t), showForm:false, formError:false, editTxnId:null, form:clearForm(s) }));
       try{
         const uid=this._userId; if(!uid) return;
-        const {error}=await _sb.from('transactions').update({date:tx.date,type:tx.type,port_id:tx.portId,sym:tx.sym,amount:tx.amount,owner:tx.owner,source:tx.source,source_from:tx.sourceFrom||null,wht:tx.wht||null,reason:tx.reason||null}).eq('id',editId);
+        const {error}=await _sb.from('transactions').update(row).eq('id',editId);
         if(error) console.error('tx update',error);
       }catch(e){console.error('tx update',e);}
       return;
@@ -1872,10 +1935,10 @@ class Component extends DCLogic {
     // ----- add new record -----
     const id=Date.now();
     const tx={...base,id};
-    this.setState(s=>({ txns:[tx,...s.txns], showForm:false, formError:false, form:{...s.form,amount:'',reason:'',wht:''} }));
+    this.setState(s=>({ txns:[tx,...s.txns], showForm:false, formError:false, form:clearForm(s) }));
     try{
       const uid=this._userId; if(!uid) return;
-      const {data,error}=await _sb.from('transactions').insert({user_id:uid,date:tx.date,type:tx.type,port_id:tx.portId,sym:tx.sym,amount:tx.amount,owner:tx.owner,source:tx.source,source_from:tx.sourceFrom||null,wht:tx.wht||null,reason:tx.reason||null}).select('id').single();
+      const {data,error}=await _sb.from('transactions').insert({user_id:uid,...row}).select('id').single();
       if(!error&&data) this.setState(s=>({txns:s.txns.map(t=>t.id===id?{...t,id:data.id}:t)}));
     }catch(e){console.error('tx insert',e);}
   }
@@ -1913,11 +1976,15 @@ class Component extends DCLogic {
     const fxDiff=Math.abs(this.state.rate-this.state.prevRate);
 
     // ----- grand + scope -----
-    const grand=(()=>{ let v=0,c=0; this.ports.forEach(p=>{const t=this.totals(p); v+=t.value; c+=t.cost;}); return {value:v,cost:c,pl:v-c,plPct:(v/c-1)*100}; })();
+    const grand=(()=>{ let v=0,c=0; this.ports.forEach(p=>{const t=this.totals(p); v+=t.value; c+=t.cost;}); return {value:v,cost:c,pl:v-c,plPct:c>0?(v/c-1)*100:0}; })();
     const sp=this.scopePorts();
     let sv=0,sc=0; sp.forEach(p=>{const t=this.totals(p); sv+=t.value; sc+=t.cost;});
-    const scope={value:sv,cost:sc,pl:sv-sc,plPct:(sv/sc-1)*100};
+    const scope={value:sv,cost:sc,pl:sv-sc,plPct:sc>0?(sv/sc-1)*100:0};
     const scopeName=this.state.dashView==='all'?this.t('พอร์ตรวม','All portfolios'):this.pName(this.state.dashView);
+    // ----- today's change (from live day % per holding) -----
+    const lpDay=this.state.livePrices||{};
+    let todayPL=0; sp.forEach(p=>p.holdings.forEach(h=>{ const q=lpDay[h.sym]; if(q&&q.chg) todayPL+=h.value*(q.chg/100); }));
+    const todayPct = sv>0 ? (todayPL/sv)*100 : 0;
 
     // ----- dashboard value series (weekly) scoped -----
     const N=78;
@@ -1925,7 +1992,7 @@ class Component extends DCLogic {
     const wgrowth=[]; for(let i=1;i<N;i++) wgrowth.push(mret[i]/mret[i-1]-1);
     const C=scope.cost/N; let inv=C,val=C; const invR=[inv],valR=[val];
     for(let i=0;i<wgrowth.length;i++){ inv+=C; val=val*(1+wgrowth[i])+C; invR.push(inv); valR.push(val); }
-    const vk=scope.value/valR[valR.length-1], ik=scope.cost/invR[invR.length-1];
+    const vk=valR[valR.length-1]?scope.value/valR[valR.length-1]:0, ik=invR[invR.length-1]?scope.cost/invR[invR.length-1]:0;
     const valSc=valR.map(x=>x*vk), invSc=invR.map(x=>x*ik);
     const vmin=Math.min(...invSc,...valSc), vmax=Math.max(...invSc,...valSc);
     const dashLine=this.path(valSc,560,180,11,vmin,vmax);
@@ -1954,7 +2021,7 @@ class Component extends DCLogic {
       {label:this.t('มูลค่า ','Value · ')+scopeName,icon:'M3 3v18h18',value:this.usd(scope.value),thb:this.thb(scope.value),sub:this.fpct(scope.plPct),subColor:upC,subBg:upB,note:this.t('ตั้งแต่เริ่ม','since start')},
       {label:this.t('เงินต้นสะสม (DCA)','Cost basis (DCA)'),icon:'M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6',value:this.usd(scope.cost),thb:this.thb(scope.cost),sub:N+this.t(' สัปดาห์',' wk'),subColor:'var(--muted)',subBg:'var(--surface2)',note:this.t('สะสม','accumulated')},
       {label:this.t('กำไร/ขาดทุน','Profit / Loss'),icon:'M3 17l6-6 4 4 8-8M21 7v6h-6',value:this.usdSign(scope.pl),thb:this.thb(scope.pl),subColor:upC,subBg:upB,sub:this.fpct(scope.plPct),note:'unrealized'},
-      {label:this.t('วันนี้','Today'),icon:'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20M12 6v6l4 2',value:'+$182',thb:this.thb(182),subColor:upC,subBg:upB,sub:'+0.84%',note:this.t('เปลี่ยนแปลง','change')},
+      {label:this.t('วันนี้','Today'),icon:'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20M12 6v6l4 2',value:this.usdSign(todayPL),thb:this.thb(todayPL),subColor:todayPL>=0?upC:'var(--down)',subBg:todayPL>=0?upB:'var(--down-soft)',sub:this.fpct(todayPct),note:this.t('เปลี่ยนแปลง','change')},
     ];
     const ranges=(this.state.lang==='en'?['1M','3M','1Y','All']:['1ด','3ด','1ปี','ทั้งหมด']).map((label,i)=>({label,color:i===3?'var(--accent)':'var(--muted)',bg:i===3?'var(--accent-soft)':'transparent'}));
 
@@ -2055,7 +2122,7 @@ class Component extends DCLogic {
     const portCards=this.ports.map(p=>{ const t=this.totals(p);
       const spk=this.series(p.sparkSeed,0.012,0.045,18); const spkP=this.path(spk,280,50,5);
       const spkF=this.areaTo(spk,280,50,5,Math.min(...spk),Math.max(...spk),50);
-      const dots=this.owners.filter(o=>p.w[o.id]>0).map(o=>({label:o.name+' '+Math.round(p.w[o.id]*100)+'%',color:o.color,soft:o.soft}));
+      const dots=this.ownerAggFor([p]).map(o=>({label:o.name+' '+Math.round(o.sharePct)+'%',color:o.color,soft:o.soft}));
       return {name:p.name,en:p.en,color:p.color,soft:p.soft,icon:p.icon,count:p.holdings.length,
         value:this.usd(t.value),valueThb:this.thb(t.value),pl:this.usdSign(t.pl),plPct:'· '+this.fpct1(t.plPct),plColor:upC,plBg:upB,
         spark:spkP,sparkFill:spkF,ownerDots:dots,
@@ -2065,20 +2132,20 @@ class Component extends DCLogic {
     const selP=this.port(this.state.selPort);
     const st=this.totals(selP);
     const selStrat=this.presets[this.state.strategies[selP.id].preset].name;
-    const selOwners=this.owners.filter(o=>selP.w[o.id]>0).map(o=>{ const ov=selP.w[o.id]*st.value,oc=selP.w[o.id]*st.cost; return {name:o.name,color:o.color,widthPct:(selP.w[o.id]*100).toFixed(0)+'%',share:(selP.w[o.id]*100).toFixed(0)+'%',value:this.usd(ov),pl:this.usdSign(ov-oc),plPct:this.fpct1((ov/oc-1)*100),plColor:upC}; });
+    const selOwners=this.ownerAggFor([selP]).map(o=>({name:o.name,color:o.color,widthPct:o.sharePct.toFixed(0)+'%',share:o.sharePct.toFixed(0)+'%',value:this.usd(o.value),pl:this.usdSign(o.pl),plPct:this.fpct1(o.plPct),plColor:o.pl>=0?upC:'var(--down)'}));
     const lpAll=this.state.livePrices||{};
-    const selHoldings=selP.holdings.map(h=>{ const units=h.value/h.price,avg=h.cost/units,pl=h.value-h.cost,plPct=(h.value/h.cost-1)*100;
-      const lq=lpAll[h.sym]; const curPrice=lq?lq.price:h.price; const isLive=!!lq;
-      return {sym:h.sym,tag:h.tag,name:h.name,value:this.usd(h.value),units:units.toFixed(units<1?4:1),avg:'$'+avg.toLocaleString('en-US',{maximumFractionDigits:units<1?0:2}),price:'$'+h.price.toLocaleString('en-US'),
-        priceNow:'$'+curPrice.toLocaleString('en-US',{maximumFractionDigits:2}),
+    const selHoldings=selP.holdings.map(h=>{ const units=h.units,avg=units>0?h.cost/units:0,pl=h.value-h.cost,plPct=h.cost>0?(h.value/h.cost-1)*100:0;
+      const lq=lpAll[h.sym]; const isLive=!!lq;
+      return {sym:h.sym,tag:h.tag,name:h.name,value:this.usd(h.value),units:units.toFixed(units<1?4:units<10?2:1),avg:'$'+avg.toLocaleString('en-US',{maximumFractionDigits:units<1?0:2}),price:'$'+h.price.toLocaleString('en-US'),
+        priceNow:'$'+h.price.toLocaleString('en-US',{maximumFractionDigits:2}),
         dayChg:isLive?this.fpct(lq.chg):this.t('สแนปช็อต','snapshot'), dayColor:isLive?(lq.chg>=0?upC:'var(--down)'):'var(--faint)', isLive, notLive:!isLive,
-        pl:this.usdSign(pl),plPct:this.fpct1(plPct),plColor:pl>=0?upC:'var(--down)',canDel:true,notCanDel:false,onDelete:()=>this.deleteHolding(selP.id,h.sym)}; });
+        pl:this.usdSign(pl),plPct:this.fpct1(plPct),plColor:pl>=0?upC:'var(--down)',canDel:true,notCanDel:false,onDelete:()=>this.deleteTxnsForSym(selP.id,h.sym)}; });
     const selRebal=this.rebalFor(selP).map(r=>({sym:r.sym,name:r.name,cur:r.cur.toFixed(1)+'%',target:r.tgt+'%',curW:Math.min(r.cur,100).toFixed(0)+'%',targetW:r.tgt+'%',action:Math.abs(r.diffV)<60?this.t('อยู่ในเป้า ✓','On target ✓'):(r.diffV>0?this.t('ซื้อเพิ่ม ','Buy ')+this.usd(r.diffV):this.t('ขายออก ','Sell ')+this.usd(-r.diffV)),actColor:Math.abs(r.diffV)<60?'var(--muted)':(r.diffV>0?upC:'var(--down)')}));
     // source of funds for selected port (from buy + dividend txns)
     const fundAgg={}; this.state.txns.filter(t=>t.portId===selP.id && (t.type==='buy'||t.type==='dividend')).forEach(t=>{ const k=t.type==='dividend'?'dividend':t.source; fundAgg[k]=(fundAgg[k]||0)+t.amount; });
     const fundTot=Object.values(fundAgg).reduce((a,b)=>a+b,0)||1;
     const selFunds=Object.keys(fundAgg).length?Object.entries(fundAgg).sort((a,b)=>b[1]-a[1]).map(([k,v])=>({label:this.sources[k].name,color:this.sources[k].color,amt:this.usd(v),pct:(v/fundTot*100).toFixed(0)+'%',widthPct:(v/fundTot*100).toFixed(1)+'%'})):[{label:this.t('ยังไม่มีบันทึก','No records yet'),color:'var(--faint)',amt:'$0',pct:'0%',widthPct:'0%'}];
-    const selCanDelete=(this.state.extraPorts||[]).some(p=>p.id===selP.id);
+    const selCanDelete=true;
     const sel={name:selP.name,en:selP.en,color:selP.color,soft:selP.soft,icon:selP.icon,strat:selStrat,value:this.usd(st.value),valueThb:this.thb(st.value),pl:this.usdSign(st.pl),plPct:this.fpct1(st.plPct),plColor:upC,owners:selOwners,holdings:selHoldings,rebal:selRebal,funds:selFunds,fundTotal:this.usd(fundTot),canDelete:selCanDelete,notCanDelete:!selCanDelete,onDeletePort:()=>this.deletePortfolio(selP.id)};
 
     // dashboard rebalance teaser: worst-deviation holding across ports
@@ -2115,16 +2182,17 @@ class Component extends DCLogic {
     const sortVal=(t)=>{ if(sk==='date') return t.date; if(sk==='type') return t.type; if(sk==='sym') return t.sym; if(sk==='port') return this.pName(t.portId); if(sk==='owner') return ownerName[t.owner]; if(sk==='amount') return (t.type==='sell'?-1:1)*t.amount; return t.date; };
     const sorted=[...filtered].sort((a,b)=>{ const va=sortVal(a),vb=sortVal(b); if(va<vb) return -1*sdir; if(va>vb) return 1*sdir; return (b.id-a.id); });
     const monMap=this.state.lang==='en'?monEn:monAbbr;
-    const txns=sorted.map(t=>{ const p=this.port(t.portId); const h=p.holdings.find(x=>x.sym===t.sym); const units=h?(t.amount/h.price):0;
+    const txns=sorted.map(t=>{ const p=this.port(t.portId); const units=(t.units!=null&&t.units!=='')?+t.units:(t.price?t.amount/t.price:0);
       const srcLabel = t.type==='dividend'?this.t('รับปันผล','Dividend received'): t.type==='sell'?this.t('ขายทำกำไร','Profit taking'): (t.source==='reinvest'?(this.t('Reinvest จาก ','Reinvest from ')+(t.sourceFrom||'')):this.sources[t.source]?this.sources[t.source].name:'');
       const dd=t.date.split('-');
       const whtVal = t.type==='dividend' ? (t.wht!=null?t.wht:+(t.amount*0.10).toFixed(2)) : null;
-      return {id:t.id,type:t.type,typeLabel:typeName[t.type],sym:t.sym,port:p.name,owner:ownerName[t.owner],oc:oc[t.owner],os:os[t.owner],
+      return {id:t.id,type:t.type,typeLabel:typeName[t.type],sym:t.sym,port:p.name,owner:ownerName[t.owner]||t.owner,oc:oc[t.owner]||'var(--muted)',os:os[t.owner]||'var(--surface2)',
         icon:t.type==='buy'?buyIcon:t.type==='sell'?sellIcon:divIcon,
         iconBg:t.type==='sell'?'var(--down-soft)':upB,iconColor:t.type==='sell'?'var(--down)':upC,
         typeColor:t.type==='sell'?'var(--down)':upC,typeBg:t.type==='sell'?'var(--down-soft)':upB,
         amt:(t.type==='sell'?'-':'+')+'$'+t.amount.toLocaleString('en-US'),amtColor:t.type==='sell'?'var(--down)':upC,
-        units:units?(units.toFixed(units<1?4:1)):'—',
+        units:units?(units.toFixed(units<1?4:units<10?2:1)):'—',
+        priceEach: (t.price!=null&&t.price!=='')?'$'+(+t.price).toLocaleString('en-US',{maximumFractionDigits:2}):'—',
         wht: whtVal!=null ? this.usd(whtVal) : '—', whtColor: whtVal? 'var(--down)':'var(--faint)',
         sourceLabel:srcLabel,reason:t.reason||'',date:(dd[2]||'')+' '+(monMap[dd[1]]||''),dateFull:t.date}; }); txns.forEach(row=>{ row.onDelete=()=>this.deleteTxn(row.id); row.onOpen=()=>this.openTxn(row); row.onEdit=()=>this.editTxn(row); });
     // sortable column headers
@@ -2288,11 +2356,11 @@ class Component extends DCLogic {
       txDeduction:T('สิทธิลดหย่อนคงเหลือ','Remaining deductions'), txAddMore:T('ลงเพิ่มได้อีก','Can add'), txTipTitle:T('คำแนะนำประหยัดภาษี','Tax-saving tip'),
       nwTitle:T('ข่าวที่เกี่ยวข้องกับพอร์ต','News for your holdings'), nwSub:T('คัดเฉพาะสินทรัพย์ที่คุณถือครอง · แตะเพื่ออ่านจากแหล่งข่าวจริง','Filtered to assets you hold · tap to read at the real source'), nwRead:T('อ่านต่อ','Read'),
       txnTitle:T('บันทึกการลงทุน','Investment records'), txnSub:T('ซื้อ · ขาย · ปันผล — พร้อมที่มาของเงินและเหตุผล','Buy · sell · dividend — with source of funds and reason'), txnAdd:T('+ เพิ่มรายการ','+ Add record'), txnNew:T('บันทึกรายการใหม่','New record'),
-      txnPort:T('พอร์ต','Portfolio'), txnAmount:T('จำนวนเงิน (USD)','Amount (USD)'), txnOwner:T('ผู้ถือเงิน','Owner'), txnSourceLbl:T('ที่มาของเงิน','Source of funds'), txnReinvestFrom:T('ปันผลจากสินทรัพย์','Dividend from asset'), txnDate:T('วันที่','Date'),
+      txnPort:T('พอร์ต','Portfolio'), txnAmount:T('จำนวนเงิน (USD)','Amount (USD)'), txnQty:T('จำนวนหน่วย/หุ้น','Quantity'), txnPrice:T('ราคาต่อหน่วย (USD)','Price/unit (USD)'), txnTotalAmt:T('มูลค่ารวม','Total value'), txnOwner:T('ผู้ถือเงิน','Owner'), txnSourceLbl:T('ที่มาของเงิน','Source of funds'), txnReinvestFrom:T('ปันผลจากสินทรัพย์','Dividend from asset'), txnDate:T('วันที่','Date'),
       txnWht:T('ภาษีหัก ณ ที่จ่าย (USD)','Withholding tax (USD)'), txnWhtHint:T('เว้นว่าง = ใช้ 10% อัตโนมัติ','Blank = auto 10%'), txnSave:T('บันทึกรายการ','Save record'), txnCancel:T('ยกเลิก','Cancel'), txnFilter:T('กรอง','Filter'), txnRecords:T('รายการ','records'), txnNoMatch:T('ไม่พบรายการตามเงื่อนไขที่กรอง','No records match the filters'),
       txnBuyHint:T('พิมพ์ชื่อย่อหุ้นใดก็ได้ หรือเลือกจากรายการ','Type any ticker or pick from the list'),
       txnErr:T('กรุณากรอกชื่อสินทรัพย์และจำนวนเงินให้ถูกต้อง','Please enter a valid asset and amount'),
-      txnWhtCol:T('หัก ณ ที่จ่าย','WHT'), txnDtDelete:T('ยกเลิกรายการนี้','Cancel record'), txnDtEdit:T('แก้ไข','Edit'), txnDtDate:T('วันที่','Date'), txnDtPort:T('พอร์ต','Portfolio'), txnDtOwner:T('ผู้ถือ','Owner'), txnDtAmt:T('จำนวนเงิน','Amount'), txnDtUnits:T('หน่วย','Units'), txnDtSrc:T('แหล่งที่มา','Source'),
+      txnWhtCol:T('หัก ณ ที่จ่าย','WHT'), txnDtDelete:T('ยกเลิกรายการนี้','Cancel record'), txnDtEdit:T('แก้ไข','Edit'), txnDtPriceEach:T('ราคาต่อหน่วย','Price/unit'), txnDtDate:T('วันที่','Date'), txnDtPort:T('พอร์ต','Portfolio'), txnDtOwner:T('ผู้ถือ','Owner'), txnDtAmt:T('จำนวนเงิน','Amount'), txnDtUnits:T('หน่วย','Units'), txnDtSrc:T('แหล่งที่มา','Source'),
       ptAddPort:T('เพิ่มพอร์ต','Add portfolio'), ptNewPort:T('สร้างพอร์ตใหม่','Create new portfolio'),
       ptPortName:T('ชื่อพอร์ต','Portfolio name'), ptPortNamePh:T('เช่น พอร์ตหุ้นปันผล US','e.g. US Dividend Portfolio'),
       ptStrategy:T('กลยุทธ์','Strategy'), ptBudget:T('งบต่อรอบ (USD)','Budget per round (USD)'), ptColor:T('สี','Color'),
@@ -2313,7 +2381,7 @@ class Component extends DCLogic {
       mbAdd:T('เพิ่มสมาชิก','Add member'), mbName:T('ชื่อสมาชิก','Member name'), mbNamePh:T('เช่น พี่สาว, แฟน, ภรรยา','e.g. Sister, Partner, Spouse'),
       anAddStock:T('เพิ่มหุ้นวิเคราะห์','Add stock'), anRemoveStock:T('นำออกจากการวิเคราะห์','Remove from analysis'),
       anSfTitle:T('เพิ่มหุ้นเข้าการวิเคราะห์','Add a stock to analyze'),
-      anSfNote:T('กรอกค่าจากงบการเงินล่าสุด ช่องที่เว้นว่างจะใช้ค่ากลางอัตโนมัติ','Enter values from the latest financials — blank fields use neutral defaults'),
+      anSfNote:T('ราคาดึงเรียลไทม์อัตโนมัติจากชื่อย่อหุ้น — ค่างบการเงินด้านล่างไม่บังคับ ใช้เพื่อคำนวณคะแนน Sniper (เว้นว่างได้ จะใช้ค่ากลาง)','Price is pulled live from the ticker — the financial fields below are optional and only feed the Sniper score (blank uses neutral defaults)'),
       anSfName:T('ชื่อบริษัท','Company name'), anSfSector:T('กลุ่มอุตสาหกรรม','Sector'), anSfPrice:T('ราคา','Price'),
       anSfRoe:T('ROE (%)','ROE (%)'), anSfRevG:T('โต Rev (%)','Rev growth (%)'), anSfNm:T('กำไรสุทธิ (%)','Net margin (%)'), anSfDivY:T('ปันผล (%)','Dividend (%)'),
       anSfErr:T('กรุณากรอกชื่อย่อและชื่อบริษัท','Please enter ticker and company name'), anSfSave:T('เพิ่มหุ้น','Add stock'), dtCustom:T('เพิ่มเอง','Custom'),
@@ -2424,7 +2492,7 @@ class Component extends DCLogic {
       memberColorOpts:[{v:'#34d399'},{v:'#8b5cf6'},{v:'#06b6d4'},{v:'#f59e0b'},{v:'#fb7185'},{v:'#eab308'}].map(c=>({...c,onPick:()=>this.setMemberForm({color:c.v}),ring:this.state.memberForm.color===c.v?'var(--text)':'transparent'})),
       // add holding
       showHoldForm:this.state.showHoldForm, holdForm:this.state.holdForm, holdFormErr:this.state.holdFormErr,
-      onOpenHoldForm:()=>this.setState({showHoldForm:true,holdFormErr:false}),
+      onOpenHoldForm:()=>{ const pid=this.state.selPort; this.setState({screen:'txn',showForm:true,editTxnId:null,formError:false}); this.setForm({type:'buy',portId:pid,qty:'',price:'',amount:''}); },
       onCancelHoldForm:()=>this.setState({showHoldForm:false,holdFormErr:false}),
       onHfSym:e=>this.setHoldForm({sym:e.target.value}),
       onHfName:e=>this.setHoldForm({name:e.target.value}),
@@ -2436,12 +2504,18 @@ class Component extends DCLogic {
       // txn
       showForm:this.state.showForm,formError:this.state.formError,form:this.state.form,filter:this.state.filter,
       isBuyForm:f.type==='buy',isReinvest:f.type==='buy'&&f.source==='reinvest',
+      isTradeForm:f.type==='buy'||f.type==='sell', notTradeForm:f.type==='dividend',
+      computedAmount: (parseFloat(f.qty)>0&&parseFloat(f.price)>0)? this.usd(parseFloat(f.qty)*parseFloat(f.price)) : '—',
+      computedAmountThb: (parseFloat(f.qty)>0&&parseFloat(f.price)>0)? this.thb(parseFloat(f.qty)*parseFloat(f.price)) : '',
+      livePxHint: this.livePrice((f.sym||'').toUpperCase(),0)? this.t('ราคาล่าสุด ','Live ')+'$'+this.livePrice((f.sym||'').toUpperCase(),0).toLocaleString('en-US',{maximumFractionDigits:2}) : '',
       assetLabel:f.type==='dividend'?this.t('หุ้น/ETF ที่จ่ายปันผล','Stock/ETF paying dividend'):this.t('สินทรัพย์','Asset'),
       reasonLabel:f.type==='sell'?this.t('เหตุผลที่ขาย','Reason for selling'):f.type==='dividend'?this.t('หมายเหตุปันผล','Dividend note'):this.t('เหตุผลที่ซื้อ','Reason for buying'),
       reasonPh:this.t('เช่น DCA รายเดือนตามแผน / ทำกำไรบางส่วน / ราคาย่อตัวน่าสะสม','e.g. Monthly DCA / partial profit-taking / dip worth accumulating'),
       typeTabs,portOpts,assetOpts,allAssetOpts,ownerOpts,sourceOpts,freqOpts,
-      onFPort:e=>{ const np=this.port(e.target.value); this.setForm({portId:e.target.value,sym:np.holdings[0].sym}); },
+      onFPort:e=>this.setForm({portId:e.target.value}),
       onFSym:e=>this.setForm({sym:e.target.value}),
+      onFQty:e=>this.setForm({qty:e.target.value}),
+      onFPrice:e=>this.setForm({price:e.target.value}),
       onFAmount:e=>this.setForm({amount:e.target.value}),
       onFOwner:e=>this.setForm({owner:e.target.value}),
       onFSource:e=>this.setForm({source:e.target.value}),
